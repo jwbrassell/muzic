@@ -21,9 +21,22 @@ def send_static(path):
 def get_db():
     """Get database connection."""
     try:
+        # Create instance directory if it doesn't exist
+        os.makedirs(os.path.dirname(Config.DATABASE_PATH), exist_ok=True)
+        
+        # Check if database exists, if not initialize it
+        db_exists = os.path.exists(Config.DATABASE_PATH)
+        
         print(f"Connecting to database at: {Config.DATABASE_PATH}")
         db = sqlite3.connect(Config.DATABASE_PATH)
         db.row_factory = sqlite3.Row
+        
+        # Initialize database if it doesn't exist
+        if not db_exists:
+            print("Database doesn't exist, initializing...")
+            init_db()
+            print("Database initialized successfully")
+        
         # Test the connection
         cursor = db.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
