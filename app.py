@@ -677,6 +677,46 @@ def toggle_shuffle():
     })
     return jsonify({'shuffle': is_shuffle})
 
+@app.route('/api/next-track')
+def get_next_track():
+    """Get information about the next track in the playlist."""
+    if not current_playlist:
+        return jsonify({'error': 'No playlist active'}), 404
+    
+    db = get_db()
+    playlist_items = db.execute('''
+        SELECT m.* 
+        FROM playlist_items pi 
+        JOIN media m ON pi.media_id = m.id 
+        WHERE pi.playlist_id = ? 
+        ORDER BY pi.order_position
+    ''', [current_playlist]).fetchall()
+    
+    if not playlist_items:
+        return jsonify({'error': 'Playlist is empty'}), 404
+    
+    total_tracks = len(playlist_items)
+    next_position = 0
+    
+    if is_shuffle:
+        if shuffle_queue:
+            next_position = shuffle_queue[0]
+        elif is_repeat:
+            # If shuffle queue is empty but repeat is on, next would be first track of new shuffle
+            next_position = 0
+        else:
+            return jsonify({'error': 'End of playlist'}), 404
+    else:
+        next_position = (current_position + 1) % total_tracks if is_repeat else current_position + 1
+        if next_position >= total_tracks:
+            return jsonify({'error': 'End of playlist'}), 404
+    
+    if 0 <= next_position < len(playlist_items):
+        next_track = dict(playlist_items[next_position])
+        return jsonify(next_track)
+    
+    return jsonify({'error': 'No next track available'}), 404
+
 @app.route('/media/<path:filename>')
 def serve_media(filename):
     """Serve media files directly."""

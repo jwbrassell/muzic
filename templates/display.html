@@ -97,6 +97,47 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
+        #progressContainer {
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10;
+        }
+
+        #progressBar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            cursor: pointer;
+            margin-bottom: 5px;
+        }
+
+        #progressFill {
+            width: 0%;
+            height: 100%;
+            background: #0d6efd;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+
+        #timeInfo {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        #nextUpContainer {
+            margin-top: 5px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        #nextUpLabel {
+            color: #0d6efd;
+            margin-right: 5px;
+        }
+
         #visualizerContainer {
             flex: 1;
             position: relative;
@@ -141,6 +182,28 @@
             text-transform: uppercase;
             letter-spacing: 2px;
         }
+
+        /* Fullscreen styles */
+        :fullscreen {
+            background-color: #000;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        :-webkit-full-screen {
+            background-color: #000;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Hide address bar in fullscreen */
+        :fullscreen #mainHeader {
+            margin-top: env(safe-area-inset-top);
+        }
+
+        :-webkit-full-screen #mainHeader {
+            margin-top: env(safe-area-inset-top);
+        }
     </style>
 </head>
 <body>
@@ -156,11 +219,26 @@
         <div id="nowPlaying" style="display: none;"></div>
         <div class="controls">
             <i id="playPauseIcon" class="fas fa-play" style="cursor: pointer; margin: 0 10px;"></i>
+            <i id="fullscreenIcon" class="fas fa-expand" style="cursor: pointer; margin: 0 10px;"></i>
         </div>
     </div>
 
     <div id="visualizerContainer">
         <canvas id="visualizer"></canvas>
+    </div>
+
+    <div id="progressContainer">
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <div id="timeInfo">
+            <span id="currentTime">0:00</span>
+            <span id="duration">0:00</span>
+        </div>
+        <div id="nextUpContainer">
+            <span id="nextUpLabel">Next up:</span>
+            <span id="nextUpSong"></span>
+        </div>
     </div>
 
     <div id="marquee">
@@ -188,6 +266,54 @@
         audioPlayer.loop = false;  // Ensure single song repeat is off
         const visualizer = new AudioVisualizer();
         
+        // Format time in seconds to MM:SS format
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Update progress bar and time displays
+        function updateProgress() {
+            if (!audioPlayer.duration) return;
+            
+            const currentTime = audioPlayer.currentTime;
+            const duration = audioPlayer.duration;
+            const progress = (currentTime / duration) * 100;
+            
+            document.getElementById('progressFill').style.width = `${progress}%`;
+            document.getElementById('currentTime').textContent = formatTime(currentTime);
+            document.getElementById('duration').textContent = formatTime(duration);
+        }
+
+        // Add click handler for progress bar
+        document.getElementById('progressBar').addEventListener('click', (e) => {
+            const progressBar = e.currentTarget;
+            const clickPosition = (e.pageX - progressBar.offsetLeft) / progressBar.offsetWidth;
+            audioPlayer.currentTime = clickPosition * audioPlayer.duration;
+        });
+
+        // Update progress every 100ms
+        setInterval(updateProgress, 100);
+
+        // Fetch and display next track info
+        async function updateNextTrack() {
+            try {
+                const response = await fetch('/api/next-track');
+                const data = await response.json();
+                if (!data.error) {
+                    const artist = data.artist.toLowerCase().includes('unknown artist') ? 'TapForNerd' : data.artist;
+                    const cleanTitle = data.title.replace(/\.(mp3|wav|m4a|mp4|ogg|webm|flac|aac)$/i, '');
+                    document.getElementById('nextUpSong').textContent = `${cleanTitle} - ${artist}`;
+                } else {
+                    document.getElementById('nextUpSong').textContent = 'End of playlist';
+                }
+            } catch (error) {
+                console.error('Error fetching next track:', error);
+                document.getElementById('nextUpSong').textContent = 'Unknown';
+            }
+        }
+
         function updatePlayPauseIcon() {
             const icon = document.getElementById('playPauseIcon');
             icon.classList.remove('fa-play', 'fa-pause');
@@ -204,15 +330,13 @@
 
         async function nextTrack() {
             try {
-                // Pause current track immediately to prevent race conditions
                 if (!audioPlayer.paused) {
                     audioPlayer.pause();
                 }
 
-                // Reset audio player state
                 audioPlayer.volume = 0;
                 audioPlayer.src = '';
-                audioPlayer.load(); // Force reload to clear any error state
+                audioPlayer.load();
 
                 const response = await fetch('/api/next', { method: 'POST' });
                 if (!response.ok) {
@@ -224,7 +348,6 @@
                     console.log('End of playlist reached or error:', data.error);
                     if (isRepeat) {
                         console.log('Repeat is on, restarting playlist');
-                        // Force a refresh of now playing to restart playlist
                         await updateNowPlaying();
                     } else {
                         document.getElementById('nowPlaying').textContent = 'End of playlist';
@@ -243,29 +366,23 @@
                 
                 if (audioPlayer.src !== window.location.origin + newSrc) {
                     try {
-                        // Set and load new source
                         audioPlayer.src = newSrc;
-                        audioPlayer.load(); // Force load to ensure proper state
+                        audioPlayer.load();
                         
-                        // Wait for metadata to load
                         await new Promise((resolve) => {
                             audioPlayer.addEventListener('loadedmetadata', resolve, { once: true });
                         });
                         
-                        // Initialize visualizer
                         await visualizer.initialize(audioPlayer);
                         visualizer.switchVisualizer();
                         
-                        // Start playback with volume 0
                         const playResult = await playAudio();
                         if (playResult === null) {
-                            // Playback was interrupted, retry once
                             console.log('Retrying playback...');
                             await new Promise(resolve => setTimeout(resolve, 100));
                             await playAudio();
                         }
                         
-                        // Fade in volume
                         const fadeInInterval = setInterval(() => {
                             if (audioPlayer.volume < 0.9) {
                                 audioPlayer.volume = Math.min(1, audioPlayer.volume + 0.1);
@@ -276,9 +393,9 @@
                         }, 50);
                         
                         updatePlayPauseIcon();
+                        updateNextTrack(); // Update next track info after changing tracks
                     } catch (error) {
                         console.error('Error during track initialization:', error);
-                        // If visualization fails, try one more time with just audio
                         audioPlayer.volume = 1;
                         await playAudio().catch(e => {
                             console.error('Final playback attempt failed:', e);
@@ -288,45 +405,9 @@
                 }
             } catch (error) {
                 console.error('Error during track transition:', error);
-                // Wait a bit longer before retrying
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 await updateNowPlaying().catch(console.error);
             }
-        }
-
-        function toggleRepeat() {
-            fetch('/api/toggle-repeat', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    isRepeat = data.repeat;
-                    const icon = document.getElementById('repeatIcon');
-                    icon.style.color = isRepeat ? '#0d6efd' : 'white';
-                    // If we're at the end of the playlist and turning repeat on, restart
-                    if (isRepeat && audioPlayer.ended) {
-                        updateNowPlaying();
-                    }
-                    // Save state after toggling repeat
-                    return fetch('/api/save-state', { method: 'POST' });
-                })
-                .catch(error => console.error('Error:', error));
-        }
-
-        function toggleShuffle() {
-            fetch('/api/toggle-shuffle', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    isShuffle = data.shuffle;
-                    const icon = document.getElementById('shuffleIcon');
-                    icon.style.color = isShuffle ? '#0d6efd' : 'white';
-                    // Save state after toggling shuffle
-                    return fetch('/api/save-state', { method: 'POST' });
-                })
-                .catch(error => console.error('Error:', error));
-        }
-
-        function previousTrack() {
-            // Add previous track functionality when backend supports it
-            console.log('Previous track - Not implemented yet');
         }
 
         async function updateNowPlaying() {
@@ -346,7 +427,6 @@
                         audioPlayer.src = '';
                         updatePlayPauseIcon();
                     }
-                    // If repeat is on and we have a playlist, try to restart it
                     if (isRepeat) {
                         console.log('Repeat is on, attempting to restart playlist');
                         const nextResponse = await fetch('/api/next', { method: 'POST' });
@@ -354,27 +434,23 @@
                             const nextData = await nextResponse.json();
                             if (!nextData.error) {
                                 console.log('Successfully restarted playlist');
-                                // Recursively call to update with new track
                                 return updateNowPlaying();
                             }
                         }
                     }
                 } else {
                     const artist = data.artist.toLowerCase().includes('unknown artist') ? 'TapForNerd' : data.artist;
-                    // Remove common audio/video extensions from title
                     const cleanTitle = data.title.replace(/\.(mp3|wav|m4a|mp4|ogg|webm|flac|aac)$/i, '');
                     document.getElementById('songTitle').textContent = `${cleanTitle} - ${artist}`;
                     const newSrc = `/media/${encodeURIComponent(data.file_path.split('/').pop())}`;
                     console.log('Setting new audio source:', newSrc);
                     
                     if (audioPlayer.src !== window.location.origin + newSrc) {
-                        // Reset audio player state
                         audioPlayer.pause();
                         audioPlayer.volume = 0;
                         audioPlayer.src = newSrc;
-                        audioPlayer.load(); // Force load to ensure proper state
+                        audioPlayer.load();
                         
-                        // Wait for metadata with timeout
                         try {
                             await Promise.race([
                                 new Promise((resolve) => {
@@ -384,26 +460,21 @@
                             ]);
                         } catch (error) {
                             console.error('Error loading metadata:', error);
-                            // Try one more time
                             audioPlayer.load();
                             await new Promise((resolve) => {
                                 audioPlayer.addEventListener('loadedmetadata', resolve, { once: true });
                             });
                         }
                         
-                        // Initialize visualizer if needed
                         await visualizer.initialize(audioPlayer);
                         
-                        // Start playback
                         const playResult = await playAudio();
                         if (playResult === null) {
-                            // Playback was interrupted, retry once
                             console.log('Retrying playback...');
                             await new Promise(resolve => setTimeout(resolve, 100));
                             await playAudio();
                         }
                         
-                        // Fade in volume only after successful playback
                         const fadeInInterval = setInterval(() => {
                             if (audioPlayer.volume < 0.9) {
                                 audioPlayer.volume = Math.min(1, audioPlayer.volume + 0.1);
@@ -414,6 +485,7 @@
                         }, 50);
                         
                         updatePlayPauseIcon();
+                        updateNextTrack(); // Update next track info after loading current track
                     }
                 }
             } catch (error) {
@@ -425,7 +497,6 @@
             try {
                 console.log('Starting audio playback...');
                 
-                // Check if we have a valid source
                 if (!audioPlayer.src) {
                     console.log('No audio source set, fetching current track...');
                     await updateNowPlaying();
@@ -434,23 +505,20 @@
                     }
                 }
                 
-                // Initialize visualizer if not already done
                 if (!visualizer.isInitialized) {
                     await visualizer.initialize(audioPlayer);
                 }
                 
-                // Resume audio context if it exists and is suspended
                 if (visualizer.audioContext?.state === 'suspended') {
                     await visualizer.audioContext.resume();
                 }
                 
-                // Wait for audio to be ready with timeout
                 const loadTimeout = new Promise((_, reject) => {
                     setTimeout(() => reject(new Error('Audio load timeout')), 5000);
                 });
                 
                 const canPlayPromise = new Promise((resolve) => {
-                    if (audioPlayer.readyState >= 2) { // HAVE_CURRENT_DATA
+                    if (audioPlayer.readyState >= 2) {
                         resolve();
                     } else {
                         audioPlayer.addEventListener('canplay', resolve, { once: true });
@@ -461,39 +529,33 @@
                     await Promise.race([canPlayPromise, loadTimeout]);
                 } catch (error) {
                     console.error('Audio loading error:', error);
-                    // Try to recover by reloading the track
                     await updateNowPlaying();
-                    // Wait again for the audio to be ready
                     await new Promise((resolve) => {
                         audioPlayer.addEventListener('canplay', resolve, { once: true });
                     });
                 }
                 
                 try {
-                    // Start playback and return the promise
                     const playPromise = audioPlayer.play();
-                    await playPromise;  // Wait for playback to actually start
+                    await playPromise;
                     
                     updatePlayPauseIcon();
                     console.log('Audio playback started successfully');
                     return playPromise;
                 } catch (playError) {
-                    // Handle abort errors gracefully
                     if (playError.name === 'AbortError') {
                         console.log('Playback was interrupted, will retry if needed');
-                        // Don't throw for abort errors, as they're expected in some cases
                         return null;
                     }
-                    throw playError; // Rethrow other errors
+                    throw playError;
                 }
             } catch (e) {
                 console.error('Playback error:', e);
-                // Try to recover by moving to next track
                 if (!isTransitioning) {
                     console.log('Attempting to recover by playing next track...');
                     await nextTrack().catch(console.error);
                 }
-                throw e;  // Propagate error for handling by caller
+                throw e;
             }
         }
 
@@ -506,39 +568,31 @@
             }
         }
 
-        // Initialize continuous playback system
         let playbackMonitor;
         
         function startContinuousPlayback() {
             console.log('Starting continuous playback monitoring...');
-            // Clear any existing monitor
             if (playbackMonitor) {
                 clearInterval(playbackMonitor);
             }
             
-            // Start periodic monitoring with a longer interval
             playbackMonitor = setInterval(() => {
                 if (!audioPlayer.paused && !isTransitioning) {
                     updateNowPlaying();
                 }
-            }, 10000); // Increased to 10 seconds to reduce interference
+            }, 10000);
         }
 
-        // Listen for messages from the admin page
         window.addEventListener('message', async (event) => {
             console.log('Received message:', event.data);
             if (event.data === 'play') {
                 try {
                     console.log('Received play command');
-                    // First update now playing to get the current track
                     await updateNowPlaying();
-                    // Then start playback
                     await playAudio();
-                    // Start continuous playback monitoring
                     startContinuousPlayback();
                 } catch (error) {
                     console.error('Error starting playback:', error);
-                    // Try again after a delay
                     setTimeout(async () => {
                         await updateNowPlaying();
                         await playAudio();
@@ -564,7 +618,6 @@
             }
         });
 
-        // Handle audio ended event with transition protection
         let isTransitioning = false;
         audioPlayer.addEventListener('ended', async () => {
             if (isTransitioning) {
@@ -578,7 +631,6 @@
             try {
                 await nextTrack();
                 if (!isRepeat) {
-                    // If repeat is off and we've reached the end, stop playback
                     const response = await fetch('/api/now-playing');
                     const data = await response.json();
                     if (data.error) {
@@ -589,25 +641,21 @@
                 }
             } catch (error) {
                 console.error('Error during track transition:', error);
-                // If next track fails, try again after a delay
                 setTimeout(nextTrack, 1000);
             } finally {
-                // Reset transition flag after a short delay to ensure complete cleanup
                 setTimeout(() => {
                     isTransitioning = false;
                 }, 500);
             }
         });
 
-        // Remove early transition trigger and only use 'ended' event
-
-        // Add click handler for play/pause icon
         document.getElementById('playPauseIcon').addEventListener('click', togglePlay);
 
-        // Start continuous playback when window loads
-        window.addEventListener('load', startContinuousPlayback);
+        window.addEventListener('load', () => {
+            startContinuousPlayback();
+            updateNextTrack(); // Initial update of next track info
+        });
 
-        // Enhanced error handling for audio
         audioPlayer.addEventListener('error', (e) => {
             const error = audioPlayer.error;
             let errorMessage = 'Unknown error';
@@ -629,7 +677,6 @@
                 }
                 console.error('Audio error:', errorMessage, error.message);
                 
-                // Try to recover by reloading the current track
                 if (error.code === MediaError.MEDIA_ERR_NETWORK) {
                     console.log('Attempting to recover from network error...');
                     setTimeout(async () => {
@@ -650,7 +697,6 @@
                 .then(response => response.json())
                 .then(data => {
                     console.log('Playlist state saved:', data);
-                    // Flash the save icon to indicate success
                     const saveIcon = document.querySelector('.fa-save');
                     saveIcon.style.color = '#0d6efd';
                     setTimeout(() => {
@@ -659,6 +705,44 @@
                 })
                 .catch(error => console.error('Error saving playlist state:', error));
         }
+
+        // Fullscreen functionality
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen()
+                    .then(() => {
+                        fullscreenIcon.classList.remove('fa-expand');
+                        fullscreenIcon.classList.add('fa-compress');
+                    })
+                    .catch(err => {
+                        console.error('Error attempting to enable fullscreen:', err);
+                    });
+            } else {
+                document.exitFullscreen()
+                    .then(() => {
+                        fullscreenIcon.classList.remove('fa-compress');
+                        fullscreenIcon.classList.add('fa-expand');
+                    })
+                    .catch(err => {
+                        console.error('Error attempting to exit fullscreen:', err);
+                    });
+            }
+        }
+
+        fullscreenIcon.addEventListener('click', toggleFullScreen);
+
+        // Update fullscreen icon when fullscreen state changes
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                fullscreenIcon.classList.remove('fa-expand');
+                fullscreenIcon.classList.add('fa-compress');
+            } else {
+                fullscreenIcon.classList.remove('fa-compress');
+                fullscreenIcon.classList.add('fa-expand');
+            }
+        });
     </script>
 </body>
 </html>
