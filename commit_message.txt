@@ -1,0 +1,44 @@
+fix: resolve playlist playback and visualization issues
+
+This commit fixes several critical issues with playlist playback and audio visualization:
+
+Audio Context Management:
+- Fix race conditions in AudioContext initialization by adding Promise-based state tracking
+- Prevent duplicate AudioContext creation during rapid track changes
+- Add proper cleanup and recovery for failed AudioContext instances
+- Fix memory leaks by properly closing unused contexts
+
+Visualization Improvements:
+- Fix visualization initialization timing to prevent null reference errors
+- Add error recovery for failed visualization attempts
+- Move resize event listener to constructor to prevent duplicate listeners
+- Add proper state checks before drawing to prevent errors with uninitialized contexts
+
+Track Transition Fixes:
+- Add proper Promise-based track transition handling
+- Fix race conditions during track changes by waiting for fade out before loading new track
+- Improve error handling during playback failures
+- Add proper cleanup between tracks to prevent audio glitches
+
+Code Quality:
+- Add proper error handling and logging throughout
+- Improve state management with isInitialized flag
+- Add cleanup method for proper resource management
+- Add null checks to prevent undefined errors
+
+The changes ensure smooth playback transitions with proper visualization, making
+the application more reliable for continuous streaming. The system now properly
+recovers from errors and maintains synchronization between audio and visuals.
+
+Technical Details:
+- AudioContext is now properly initialized once and reused
+- Visualization state is properly tracked and managed
+- Track transitions use Promises to ensure proper sequencing
+- Error recovery is implemented at all critical points
+- Memory management is improved with proper cleanup
+
+Testing:
+- Verified continuous playback through multiple tracks
+- Tested error recovery with network issues
+- Verified visualization remains synchronized
+- Confirmed proper cleanup during track changes
