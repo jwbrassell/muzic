@@ -1,0 +1,447 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Ad Schedules - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Ad Schedules</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#scheduleModal">
+            <i class="fas fa-plus"></i> Create Schedule
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <!-- Filter -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <select class="form-select" id="filterCampaign">
+                            <option value="">All Campaigns</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="filterStatus">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="paused">Paused</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="filterFrequency">
+                            <option value="">All Frequencies</option>
+                            <option value="hourly">Hourly</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Schedules List -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Campaign</th>
+                                <th>Frequency</th>
+                                <th>Time Slots</th>
+                                <th>Status</th>
+                                <th>Next Run</th>
+                                <th>Last Run</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedulesList">
+                            <tr>
+                                <td colspan="7" class="text-center">Loading schedules...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav aria-label="Schedules navigation">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">Previous</a>
+                        </li>
+                        <li class="page-item active">
+                            <a class="page-link" href="#">1</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="#">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Schedule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="scheduleCampaign" class="form-label">Campaign</label>
+                            <select class="form-select" id="scheduleCampaign" required>
+                                <option value="">Select Campaign</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="scheduleFrequency" class="form-label">Frequency</label>
+                            <select class="form-select" id="scheduleFrequency" required>
+                                <option value="hourly">Hourly</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Time Slots -->
+                    <div class="mb-3">
+                        <label class="form-label">Time Slots</label>
+                        <div id="timeSlotsContainer">
+                            <!-- Hourly -->
+                            <div id="hourlySlots" class="mb-3">
+                                <div class="form-text mb-2">Select minutes within each hour to play ads</div>
+                                <div class="btn-group flex-wrap" role="group">
+                                    {% for minute in range(0, 60, 5) %}
+                                    <input type="checkbox" class="btn-check" id="minute{{ minute }}" value="{{ minute }}">
+                                    <label class="btn btn-outline-primary" for="minute{{ minute }}">
+                                        :{{ '%02d'|format(minute) }}
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Daily -->
+                            <div id="dailySlots" class="mb-3 d-none">
+                                <div class="form-text mb-2">Select hours to play ads</div>
+                                <div class="btn-group flex-wrap" role="group">
+                                    {% for hour in range(24) %}
+                                    <input type="checkbox" class="btn-check" id="hour{{ hour }}" value="{{ hour }}">
+                                    <label class="btn btn-outline-primary" for="hour{{ hour }}">
+                                        {{ '%02d'|format(hour) }}:00
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Weekly -->
+                            <div id="weeklySlots" class="mb-3 d-none">
+                                <div class="form-text mb-2">Select days and times</div>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="btn-group-vertical w-100" role="group">
+                                            {% for day in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] %}
+                                            <input type="checkbox" class="btn-check" id="day{{ loop.index0 }}" value="{{ loop.index0 }}">
+                                            <label class="btn btn-outline-primary" for="day{{ loop.index0 }}">{{ day }}</label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Times</label>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <input type="time" class="form-control mb-2" id="weeklyStartTime">
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="time" class="form-control mb-2" id="weeklyEndTime">
+                                            </div>
+                                        </div>
+                                        <div class="form-text">Ads will play between these times on selected days</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Settings -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduleStatus" class="form-label">Initial Status</label>
+                                <select class="form-select" id="scheduleStatus" required>
+                                    <option value="active">Active</option>
+                                    <option value="paused">Paused</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduleLimit" class="form-label">Daily Limit</label>
+                                <input type="number" class="form-control" id="scheduleLimit" min="1" value="10">
+                                <div class="form-text">Maximum plays per day (0 for unlimited)</div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize schedules list
+    function loadSchedules(page = 1) {
+        const campaign = document.getElementById('filterCampaign').value;
+        const status = document.getElementById('filterStatus').value;
+        const frequency = document.getElementById('filterFrequency').value;
+        
+        fetch(`/api/v1/ads/schedules?page=${page}&campaign=${campaign}&status=${status}&frequency=${frequency}`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('schedulesList');
+                tbody.innerHTML = data.items.map(schedule => `
+                    <tr>
+                        <td>${schedule.campaign_name}</td>
+                        <td>${formatFrequency(schedule.frequency)}</td>
+                        <td>${formatTimeSlots(schedule)}</td>
+                        <td>
+                            <span class="badge bg-${getStatusColor(schedule.status)}">
+                                ${schedule.status}
+                            </span>
+                        </td>
+                        <td>${formatDate(schedule.next_run_at)}</td>
+                        <td>${formatDate(schedule.last_run_at)}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="editSchedule(${schedule.id})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-${schedule.status === 'active' ? 'warning' : 'success'}" 
+                                        onclick="toggleSchedule(${schedule.id})">
+                                    <i class="fas fa-${schedule.status === 'active' ? 'pause' : 'play'}"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteSchedule(${schedule.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                updatePagination(data.pagination);
+            })
+            .catch(error => {
+                console.error('Error loading schedules:', error);
+                document.getElementById('schedulesList').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-danger">
+                            Error loading schedules
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+    
+    // Load campaigns for dropdown
+    function loadCampaigns() {
+        fetch('/api/v1/ads/campaigns')
+            .then(response => response.json())
+            .then(data => {
+                const campaignOptions = `
+                    <option value="">All Campaigns</option>
+                    ${data.items.map(campaign => `
+                        <option value="${campaign.id}">${campaign.name}</option>
+                    `).join('')}
+                `;
+                
+                document.getElementById('filterCampaign').innerHTML = campaignOptions;
+                document.getElementById('scheduleCampaign').innerHTML = campaignOptions;
+            })
+            .catch(error => console.error('Error loading campaigns:', error));
+    }
+    
+    // Format helpers
+    function formatFrequency(frequency) {
+        return frequency.charAt(0).toUpperCase() + frequency.slice(1);
+    }
+    
+    function formatTimeSlots(schedule) {
+        switch (schedule.frequency) {
+            case 'hourly':
+                return schedule.slots.map(minute => `:${minute.toString().padStart(2, '0')}`).join(', ');
+            case 'daily':
+                return schedule.slots.map(hour => `${hour.toString().padStart(2, '0')}:00`).join(', ');
+            case 'weekly':
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                return schedule.days.map(day => days[day]).join(', ') + 
+                       ` ${schedule.start_time}-${schedule.end_time}`;
+            default:
+                return '';
+        }
+    }
+    
+    function formatDate(dateString) {
+        if (!dateString) return 'Never';
+        return new Date(dateString).toLocaleString();
+    }
+    
+    function getStatusColor(status) {
+        switch (status) {
+            case 'active': return 'success';
+            case 'paused': return 'warning';
+            case 'completed': return 'secondary';
+            default: return 'secondary';
+        }
+    }
+    
+    // Schedule type handling
+    document.getElementById('scheduleFrequency').addEventListener('change', function() {
+        const hourlySlots = document.getElementById('hourlySlots');
+        const dailySlots = document.getElementById('dailySlots');
+        const weeklySlots = document.getElementById('weeklySlots');
+        
+        hourlySlots.classList.add('d-none');
+        dailySlots.classList.add('d-none');
+        weeklySlots.classList.add('d-none');
+        
+        switch (this.value) {
+            case 'hourly':
+                hourlySlots.classList.remove('d-none');
+                break;
+            case 'daily':
+                dailySlots.classList.remove('d-none');
+                break;
+            case 'weekly':
+                weeklySlots.classList.remove('d-none');
+                break;
+        }
+    });
+    
+    // Schedule actions
+    window.saveSchedule = async function() {
+        const form = document.getElementById('scheduleForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        const frequency = document.getElementById('scheduleFrequency').value;
+        const schedule = {
+            campaign_id: document.getElementById('scheduleCampaign').value,
+            frequency,
+            status: document.getElementById('scheduleStatus').value,
+            daily_limit: parseInt(document.getElementById('scheduleLimit').value) || 0
+        };
+        
+        // Get time slots based on frequency
+        switch (frequency) {
+            case 'hourly':
+                schedule.slots = Array.from(document.querySelectorAll('#hourlySlots input:checked'))
+                    .map(input => parseInt(input.value));
+                break;
+            case 'daily':
+                schedule.slots = Array.from(document.querySelectorAll('#dailySlots input:checked'))
+                    .map(input => parseInt(input.value));
+                break;
+            case 'weekly':
+                schedule.days = Array.from(document.querySelectorAll('#weeklySlots input[id^="day"]:checked'))
+                    .map(input => parseInt(input.value));
+                schedule.start_time = document.getElementById('weeklyStartTime').value;
+                schedule.end_time = document.getElementById('weeklyEndTime').value;
+                break;
+        }
+        
+        try {
+            const response = await fetch('/api/v1/ads/schedules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(schedule)
+            });
+            
+            if (!response.ok) throw new Error('Failed to create schedule');
+            
+            bootstrap.Modal.getInstance(document.getElementById('scheduleModal')).hide();
+            form.reset();
+            loadSchedules();
+            
+        } catch (error) {
+            console.error('Error creating schedule:', error);
+            alert('Failed to create schedule');
+        }
+    };
+    
+    window.editSchedule = function(id) {
+        // Implement edit functionality
+    };
+    
+    window.toggleSchedule = async function(id) {
+        try {
+            const response = await fetch(`/api/v1/ads/schedules/${id}/toggle`, {
+                method: 'POST'
+            });
+            
+            if (!response.ok) throw new Error('Failed to toggle schedule');
+            
+            loadSchedules();
+            
+        } catch (error) {
+            console.error('Error toggling schedule:', error);
+            alert('Failed to toggle schedule');
+        }
+    };
+    
+    window.deleteSchedule = async function(id) {
+        if (!confirm('Are you sure you want to delete this schedule?')) return;
+        
+        try {
+            const response = await fetch(`/api/v1/ads/schedules/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) throw new Error('Failed to delete schedule');
+            
+            loadSchedules();
+            
+        } catch (error) {
+            console.error('Error deleting schedule:', error);
+            alert('Failed to delete schedule');
+        }
+    };
+    
+    // Event handlers
+    document.getElementById('filterCampaign').addEventListener('change', () => {
+        loadSchedules(1);
+    });
+    
+    document.getElementById('filterStatus').addEventListener('change', () => {
+        loadSchedules(1);
+    });
+    
+    document.getElementById('filterFrequency').addEventListener('change', () => {
+        loadSchedules(1);
+    });
+    
+    // Initial load
+    loadSchedules();
+    loadCampaigns();
+});
+
+function updatePagination(pagination) {
+    // Implement pagination update
+}
+</script>
+{% endblock %}

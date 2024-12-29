@@ -1,4 +1,4 @@
-class BaseVisualizer {
+export class BaseVisualizer {
     constructor(canvas, analyser) {
         this.canvas = canvas;
         this.canvasCtx = canvas.getContext('2d');
@@ -11,20 +11,34 @@ class BaseVisualizer {
         throw new Error('Draw method must be implemented');
     }
 
-    getRandomColor() {
-        const colors = [
-            '#FF0000', '#00FF00', '#0000FF', 
-            '#FFFF00', '#FF00FF', '#00FFFF',
-            '#FFA500', '#800080', '#FFC0CB',
-            '#40E0D0', '#FF69B4', '#7CFC00'
-        ];
-        return colors[Math.floor(Math.random() * colors.length)];
+    getThemeColors() {
+        // Brand theme colors with consideration for visibility in both modes
+        return {
+            primary: '#FF1A1A',     // Bright red like the logo
+            secondary: '#FF0000',    // Pure red for contrast
+            accent: '#800000',       // Darker red for depth
+            glow: 'rgba(255, 0, 0, 0.3)', // Red glow effect
+            dark: '#1A1A1A',         // Near black for dark mode
+            light: '#FFFFFF'         // White for light mode contrast
+        };
+    }
+
+    getRandomThemeColor() {
+        const colors = this.getThemeColors();
+        const themeColors = [colors.primary, colors.secondary, colors.accent];
+        return themeColors[Math.floor(Math.random() * themeColors.length)];
     }
 
     getGradient(startColor, endColor) {
+        const colors = this.getThemeColors();
         const gradient = this.canvasCtx.createLinearGradient(0, this.canvas.height, 0, 0);
-        gradient.addColorStop(0, startColor);
-        gradient.addColorStop(1, endColor);
+        
+        // Add glow effect
+        gradient.addColorStop(0, colors.glow);
+        gradient.addColorStop(0.2, startColor);
+        gradient.addColorStop(0.8, endColor);
+        gradient.addColorStop(1, colors.glow);
+        
         return gradient;
     }
 }

@@ -1,0 +1,26 @@
+{% extends "errors/base.html" %}
+
+{% block title %}500 Server Error{% endblock %}
+
+{% block error_icon %}
+<i class="fas fa-exclamation-triangle"></i>
+{% endblock %}
+
+{% block error_code %}500{% endblock %}
+
+{% block error_message %}Internal Server Error{% endblock %}
+
+{% block error_details %}
+Something went wrong on our end.<br>
+Our team has been notified and we're working to fix the issue.<br>
+Please try again later.
+{% endblock %}
+
+{% block error_actions %}
+<a href="{{ url_for('admin.index') }}" class="btn btn-primary">
+    <i class="fas fa-home"></i> Back to Dashboard
+</a>
+<a href="mailto:support@tapfornerd.com" class="btn btn-info">
+    <i class="fas fa-envelope"></i> Contact Support
+</a>
+{% endblock %}

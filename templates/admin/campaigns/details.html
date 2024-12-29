@@ -1,0 +1,285 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Campaign Details - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Campaign Details</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.href='{{ url_for('admin.campaign_list') }}'">
+            <i class="fas fa-arrow-left"></i> Back to Campaigns
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="location.href='{{ url_for('admin.campaign_edit', campaign_id=campaign.id) }}'">
+            <i class="fas fa-edit"></i> Edit Campaign
+        </button>
+    </div>
+</div>
+
+<!-- Campaign Overview -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Campaign Information</h5>
+                        <dl class="row">
+                            <dt class="col-sm-4">Name</dt>
+                            <dd class="col-sm-8">{{ campaign.name }}</dd>
+                            
+                            <dt class="col-sm-4">Status</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge bg-{{ campaign.status|status_color }}">
+                                    {{ campaign.status|title }}
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-4">Start Date</dt>
+                            <dd class="col-sm-8">{{ campaign.start_date|format_date }}</dd>
+                            
+                            <dt class="col-sm-4">End Date</dt>
+                            <dd class="col-sm-8">{{ campaign.end_date|format_date }}</dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Performance Metrics</h5>
+                        <dl class="row">
+                            <dt class="col-sm-4">Total Impressions</dt>
+                            <dd class="col-sm-8">{{ metrics.impressions|format_number }}</dd>
+                            
+                            <dt class="col-sm-4">Completion Rate</dt>
+                            <dd class="col-sm-8">{{ metrics.completion_rate }}%</dd>
+                            
+                            <dt class="col-sm-4">Progress</dt>
+                            <dd class="col-sm-8">
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ campaign.progress }}%" 
+                                         aria-valuenow="{{ campaign.progress }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        {{ campaign.progress }}%
+                                    </div>
+                                </div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Charts -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Impressions Over Time</h5>
+                <div class="chart-container">
+                    <canvas id="impressionsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Time Distribution</h5>
+                <div class="chart-container">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assets Performance -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Asset Performance</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Asset</th>
+                                <th>Type</th>
+                                <th>Duration</th>
+                                <th>Impressions</th>
+                                <th>Completion Rate</th>
+                                <th>Last Played</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for asset in assets %}
+                            <tr>
+                                <td>{{ asset.title }}</td>
+                                <td>
+                                    <span class="badge bg-{{ asset.type|asset_type_color }}">
+                                        {{ asset.type|title }}
+                                    </span>
+                                </td>
+                                <td>{{ asset.duration|format_duration }}</td>
+                                <td>{{ asset_performance[asset.id].impressions|format_number }}</td>
+                                <td>{{ asset_performance[asset.id].completion_rate }}%</td>
+                                <td>{{ asset_performance[asset.id].last_played|format_date }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="previewAsset({{ asset.id }})">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Schedule</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="location.href='{{ url_for('admin.campaign_schedule', campaign_id=campaign.id) }}'">
+                        <i class="fas fa-edit"></i> Edit Schedule
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Time Slots</th>
+                                <th>Status</th>
+                                <th>Next Run</th>
+                                <th>Last Run</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in schedules %}
+                            <tr>
+                                <td>{{ schedule.type|title }}</td>
+                                <td>{{ schedule|format_schedule }}</td>
+                                <td>
+                                    <span class="badge bg-{{ schedule.status|status_color }}">
+                                        {{ schedule.status|title }}
+                                    </span>
+                                </td>
+                                <td>{{ schedule.next_run_at|format_date }}</td>
+                                <td>{{ schedule.last_run_at|format_date }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Asset Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContainer">
+                    <!-- Media player will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize charts
+    const impressionsCtx = document.getElementById('impressionsChart').getContext('2d');
+    const distributionCtx = document.getElementById('distributionChart').getContext('2d');
+    
+    const impressionsChart = new Chart(impressionsCtx, {
+        type: 'line',
+        data: {
+            labels: {{ metrics.impressions_over_time|map(attribute='date')|list|tojson }},
+            datasets: [{
+                label: 'Impressions',
+                data: {{ metrics.impressions_over_time|map(attribute='count')|list|tojson }},
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    const distributionChart = new Chart(distributionCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ distribution|map(attribute='hour')|list|tojson }},
+            datasets: [{
+                label: 'Plays',
+                data: {{ distribution|map(attribute='count')|list|tojson }},
+                backgroundColor: 'rgb(54, 162, 235)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Asset preview
+    window.previewAsset = function(assetId) {
+        fetch(`/api/v1/ads/assets/${assetId}`)
+            .then(response => response.json())
+            .then(asset => {
+                const container = document.getElementById('previewContainer');
+                if (asset.type === 'audio') {
+                    container.innerHTML = `
+                        <audio src="${asset.url}" controls style="width: 100%"></audio>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <video src="${asset.url}" controls style="width: 100%"></video>
+                    `;
+                }
+                
+                new bootstrap.Modal(document.getElementById('previewModal')).show();
+            })
+            .catch(error => {
+                console.error('Error loading asset:', error);
+                alert('Failed to load asset preview');
+            });
+    };
+});
+</script>
+{% endblock %}

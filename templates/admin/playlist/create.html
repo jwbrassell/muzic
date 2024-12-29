@@ -1,0 +1,357 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Create Playlist - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Create Playlist</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.href='{{ url_for('admin.playlist_list') }}'">
+            <i class="fas fa-arrow-left"></i> Back to Playlists
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form id="playlistForm">
+                    <!-- Basic Info -->
+                    <div class="mb-4">
+                        <h5>Basic Information</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="playlistName" class="form-label">Playlist Name</label>
+                                    <input type="text" class="form-control" id="playlistName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="playlistStatus" class="form-label">Status</label>
+                                    <select class="form-select" id="playlistStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="playlistDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="playlistDescription" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Media Selection -->
+                    <div class="mb-4">
+                        <h5>Media Selection</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="mediaSearch" placeholder="Search media...">
+                                    <button class="btn btn-outline-secondary" type="button">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <select class="form-select" id="mediaFilter">
+                                    <option value="">All Types</option>
+                                    <option value="audio">Audio</option>
+                                    <option value="video">Video</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Available Media -->
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">Available Media</div>
+                                    <div class="card-body">
+                                        <div class="list-group" id="availableMedia" 
+                                             style="height: 400px; overflow-y: auto;"
+                                             ondragover="handleDragOver(event)"
+                                             ondrop="handleDrop(event, 'available')">
+                                            <!-- Media items will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Selected Media -->
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        Selected Media
+                                        <span class="badge bg-primary float-end" id="selectedCount">0</span>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="list-group" id="selectedMedia" 
+                                             style="height: 400px; overflow-y: auto;"
+                                             ondragover="handleDragOver(event)"
+                                             ondrop="handleDrop(event, 'selected')">
+                                            <!-- Selected items will appear here -->
+                                            <div class="text-center text-muted p-3" id="dropHint">
+                                                <i class="fas fa-arrow-down fa-2x mb-2"></i><br>
+                                                Drag media items here
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Playback Settings -->
+                    <div class="mb-4">
+                        <h5>Playback Settings</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="shuffleEnabled">
+                                        <label class="form-check-label" for="shuffleEnabled">
+                                            Enable Shuffle
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="repeatEnabled">
+                                        <label class="form-check-label" for="repeatEnabled">
+                                            Enable Repeat
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Create Playlist
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectedMedia = new Set();
+    
+    // Style for draggable items
+    const style = document.createElement('style');
+    style.textContent = `
+        .list-group-item.dragging {
+            opacity: 0.5;
+            border: 2px dashed #007bff;
+        }
+        .list-group-item {
+            cursor: move;
+        }
+        .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+        #dropHint {
+            border: 2px dashed #dee2e6;
+            border-radius: 0.25rem;
+            display: block;
+        }
+        #dropHint.d-none {
+            display: none !important;
+        }
+        .list-group-item-action:active {
+            background-color: #e9ecef;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Initialize available media list
+    function loadAvailableMedia() {
+        fetch('/api/v1/media/library')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('availableMedia');
+                container.innerHTML = data.items
+                    .filter(item => !selectedMedia.has(item.id))
+                    .map(item => `
+                        <div class="list-group-item list-group-item-action" 
+                             data-id="${item.id}"
+                             data-title="${item.title}"
+                             draggable="true"
+                             ondragstart="handleDragStart(event)"
+                             ondragend="handleDragEnd(event)"
+                             onclick="selectMedia(${item.id}, '${item.title}')">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${item.title}</h6>
+                                <small>${formatDuration(item.duration)}</small>
+                            </div>
+                            <small class="text-muted">
+                                ${item.type} | ${formatSize(item.size)}
+                            </small>
+                        </div>
+                    `).join('');
+                
+                updateDropHint();
+            })
+            .catch(error => {
+                console.error('Error loading media:', error);
+                document.getElementById('availableMedia').innerHTML = `
+                    <div class="text-center text-danger">Error loading media</div>
+                `;
+            });
+    }
+    
+    // Format helpers
+    function formatDuration(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    
+    function formatSize(bytes) {
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        while (bytes >= 1024 && i < sizes.length - 1) {
+            bytes /= 1024;
+            i++;
+        }
+        return `${bytes.toFixed(1)} ${sizes[i]}`;
+    }
+    
+    // Drag and drop handlers
+    window.handleDragStart = function(event) {
+        event.target.classList.add('dragging');
+        event.dataTransfer.setData('text/plain', JSON.stringify({
+            id: event.target.dataset.id,
+            title: event.target.dataset.title
+        }));
+    };
+
+    window.handleDragEnd = function(event) {
+        event.target.classList.remove('dragging');
+    };
+
+    window.handleDragOver = function(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    };
+
+    window.handleDrop = function(event, target) {
+        event.preventDefault();
+        const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+        
+        if (target === 'selected' && !selectedMedia.has(parseInt(data.id))) {
+            selectMedia(parseInt(data.id), data.title);
+        } else if (target === 'available' && selectedMedia.has(parseInt(data.id))) {
+            removeMedia(parseInt(data.id));
+        }
+    };
+
+    function updateDropHint() {
+        const dropHint = document.getElementById('dropHint');
+        if (dropHint) {
+            dropHint.classList.toggle('d-none', selectedMedia.size > 0);
+        }
+    }
+
+    // Media selection handling
+    window.selectMedia = function(id, title) {
+        selectedMedia.add(id);
+        
+        const container = document.getElementById('selectedMedia');
+        const div = document.createElement('div');
+        div.className = 'list-group-item';
+        div.dataset.id = id;
+        div.dataset.title = title;
+        div.draggable = true;
+        div.ondragstart = handleDragStart;
+        div.ondragend = handleDragEnd;
+        div.innerHTML = `
+            <div class="d-flex w-100 justify-content-between align-items-center">
+                <div>${title}</div>
+                <button type="button" class="btn btn-sm btn-outline-danger" 
+                        onclick="removeMedia(${id})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(div);
+        
+        updateSelectedCount();
+        updateDropHint();
+        loadAvailableMedia();
+    };
+    
+    window.removeMedia = function(id) {
+        selectedMedia.delete(id);
+        document.querySelector(`#selectedMedia [data-id="${id}"]`).remove();
+        updateSelectedCount();
+        updateDropHint();
+        loadAvailableMedia();
+    };
+    
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = selectedMedia.size;
+    }
+    
+    // Form submission
+    document.getElementById('playlistForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const playlist = {
+            name: document.getElementById('playlistName').value,
+            description: document.getElementById('playlistDescription').value,
+            status: document.getElementById('playlistStatus').value,
+            media_ids: Array.from(selectedMedia),
+            settings: {
+                shuffle: document.getElementById('shuffleEnabled').checked,
+                repeat: document.getElementById('repeatEnabled').checked
+            }
+        };
+        
+        try {
+            const response = await fetch('/api/v1/playlists', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(playlist)
+            });
+            
+            if (!response.ok) throw new Error('Failed to create playlist');
+            
+            location.href = '{{ url_for('admin.playlist_list') }}';
+            
+        } catch (error) {
+            console.error('Error creating playlist:', error);
+            alert('Failed to create playlist');
+        }
+    });
+    
+    // Media search handling
+    let searchTimeout;
+    document.getElementById('mediaSearch').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            loadAvailableMedia();
+        }, 500);
+    });
+    
+    document.getElementById('mediaFilter').addEventListener('change', loadAvailableMedia);
+    
+    // Initial load
+    loadAvailableMedia();
+});
+</script>
+{% endblock %}

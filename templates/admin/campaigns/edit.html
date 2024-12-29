@@ -1,0 +1,278 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Edit Campaign - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Edit Campaign</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.href='{{ url_for('admin.campaign_details', campaign_id=campaign.id) }}'">
+            <i class="fas fa-arrow-left"></i> Back to Details
+        </button>
+    </div>
+</div>
+
+<!-- Campaign Form -->
+<div class="row">
+    <div class="col-md-12">
+        <form id="campaignForm">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Campaign Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="campaignName" class="form-label">Campaign Name</label>
+                                <input type="text" class="form-control" id="campaignName" name="name" 
+                                       value="{{ campaign.name }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="campaignStatus" class="form-label">Status</label>
+                                <select class="form-select" id="campaignStatus" name="status">
+                                    <option value="draft" {% if campaign.status == 'draft' %}selected{% endif %}>Draft</option>
+                                    <option value="active" {% if campaign.status == 'active' %}selected{% endif %}>Active</option>
+                                    <option value="paused" {% if campaign.status == 'paused' %}selected{% endif %}>Paused</option>
+                                    <option value="completed" {% if campaign.status == 'completed' %}selected{% endif %}>Completed</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="startDate" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="startDate" name="start_date" 
+                                       value="{{ campaign.start_date|format_date_input }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="endDate" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="endDate" name="end_date" 
+                                       value="{{ campaign.end_date|format_date_input }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="targetImpressions" class="form-label">Target Impressions</label>
+                                <input type="number" class="form-control" id="targetImpressions" name="target_impressions" 
+                                       value="{{ campaign.target_impressions }}" min="1">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="dailyLimit" class="form-label">Daily Limit</label>
+                                <input type="number" class="form-control" id="dailyLimit" name="daily_limit" 
+                                       value="{{ campaign.daily_limit }}" min="0">
+                                <div class="form-text">0 for unlimited</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3">{{ campaign.description }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assets -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Assets</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="location.href='{{ url_for('admin.campaign_assets', campaign_id=campaign.id) }}'">
+                            <i class="fas fa-plus"></i> Add Assets
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Type</th>
+                                    <th>Duration</th>
+                                    <th>Weight</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for asset in assets %}
+                                <tr>
+                                    <td>{{ asset.title }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ asset.type|asset_type_color }}">
+                                            {{ asset.type|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ asset.duration|format_duration }}</td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               style="width: 80px;"
+                                               name="asset_weights[{{ asset.id }}]" 
+                                               value="{{ asset.weight }}" 
+                                               min="0" max="100">
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="previewAsset({{ asset.id }})">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeAsset({{ asset.id }})">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="text-end mb-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Asset Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContainer">
+                    <!-- Media player will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form submission
+    document.getElementById('campaignForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            name: formData.get('name'),
+            status: formData.get('status'),
+            start_date: formData.get('start_date'),
+            end_date: formData.get('end_date'),
+            target_impressions: parseInt(formData.get('target_impressions')),
+            daily_limit: parseInt(formData.get('daily_limit')),
+            description: formData.get('description'),
+            asset_weights: {}
+        };
+        
+        // Get asset weights
+        document.querySelectorAll('[name^="asset_weights["]').forEach(input => {
+            const assetId = input.name.match(/\[(\d+)\]/)[1];
+            data.asset_weights[assetId] = parseInt(input.value);
+        });
+        
+        try {
+            const response = await fetch(`/api/v1/ads/campaigns/{{ campaign.id }}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) throw new Error('Failed to update campaign');
+            
+            location.href = '{{ url_for('admin.campaign_details', campaign_id=campaign.id) }}';
+            
+        } catch (error) {
+            console.error('Error updating campaign:', error);
+            alert('Failed to update campaign');
+        }
+    });
+    
+    // Asset preview
+    window.previewAsset = function(assetId) {
+        fetch(`/api/v1/ads/assets/${assetId}`)
+            .then(response => response.json())
+            .then(asset => {
+                const container = document.getElementById('previewContainer');
+                if (asset.type === 'audio') {
+                    container.innerHTML = `
+                        <audio src="${asset.url}" controls style="width: 100%"></audio>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <video src="${asset.url}" controls style="width: 100%"></video>
+                    `;
+                }
+                
+                new bootstrap.Modal(document.getElementById('previewModal')).show();
+            })
+            .catch(error => {
+                console.error('Error loading asset:', error);
+                alert('Failed to load asset preview');
+            });
+    };
+    
+    // Remove asset
+    window.removeAsset = async function(assetId) {
+        if (!confirm('Are you sure you want to remove this asset from the campaign?')) return;
+        
+        try {
+            const response = await fetch(`/api/v1/ads/campaigns/{{ campaign.id }}/assets/${assetId}`, {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) throw new Error('Failed to remove asset');
+            
+            location.reload();
+            
+        } catch (error) {
+            console.error('Error removing asset:', error);
+            alert('Failed to remove asset');
+        }
+    };
+    
+    // Date validation
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    startDate.addEventListener('change', () => {
+        endDate.min = startDate.value;
+        if (endDate.value && endDate.value < startDate.value) {
+            endDate.value = startDate.value;
+        }
+    });
+    
+    endDate.addEventListener('change', () => {
+        startDate.max = endDate.value;
+        if (startDate.value && startDate.value > endDate.value) {
+            startDate.value = endDate.value;
+        }
+    });
+});
+</script>
+{% endblock %}

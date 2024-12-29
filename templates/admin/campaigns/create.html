@@ -1,0 +1,153 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Create Campaign - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Create Campaign</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.href='{{ url_for('admin.campaign_list') }}'">
+            <i class="fas fa-arrow-left"></i> Back to Campaigns
+        </button>
+    </div>
+</div>
+
+<!-- Campaign Form -->
+<div class="row">
+    <div class="col-md-12">
+        <form id="campaignForm">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Campaign Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="campaignName" class="form-label">Campaign Name</label>
+                                <input type="text" class="form-control" id="campaignName" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="campaignStatus" class="form-label">Status</label>
+                                <select class="form-select" id="campaignStatus" name="status">
+                                    <option value="draft">Draft</option>
+                                    <option value="active">Active</option>
+                                    <option value="paused">Paused</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="startDate" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="startDate" name="start_date" 
+                                       value="{{ now()|format_date_input }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="endDate" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="endDate" name="end_date" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="targetImpressions" class="form-label">Target Impressions</label>
+                                <input type="number" class="form-control" id="targetImpressions" name="target_impressions" min="1">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="dailyLimit" class="form-label">Daily Limit</label>
+                                <input type="number" class="form-control" id="dailyLimit" name="daily_limit" min="0" value="0">
+                                <div class="form-text">0 for unlimited</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="text-end mb-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Create Campaign
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form submission
+    document.getElementById('campaignForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            name: formData.get('name'),
+            status: formData.get('status'),
+            start_date: formData.get('start_date'),
+            end_date: formData.get('end_date'),
+            target_impressions: parseInt(formData.get('target_impressions')) || null,
+            daily_limit: parseInt(formData.get('daily_limit')) || 0,
+            description: formData.get('description')
+        };
+        
+        try {
+            const response = await fetch('/api/v1/ads/campaigns', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) throw new Error('Failed to create campaign');
+            
+            const result = await response.json();
+            location.href = '{{ url_for('admin.campaign_list') }}';
+            
+        } catch (error) {
+            console.error('Error creating campaign:', error);
+            alert('Failed to create campaign');
+        }
+    });
+    
+    // Date validation
+    const startDate = document.getElementById('startDate');
+    const endDate = document.getElementById('endDate');
+    
+    startDate.addEventListener('change', () => {
+        endDate.min = startDate.value;
+        if (endDate.value && endDate.value < startDate.value) {
+            endDate.value = startDate.value;
+        }
+    });
+    
+    endDate.addEventListener('change', () => {
+        startDate.max = endDate.value;
+        if (startDate.value && startDate.value > endDate.value) {
+            startDate.value = endDate.value;
+        }
+    });
+    
+    // Set initial end date min to start date
+    endDate.min = startDate.value;
+});
+</script>
+{% endblock %}

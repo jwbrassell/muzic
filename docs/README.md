@@ -1,74 +1,83 @@
-# TapForNerd Radio
-
-A web-based music streaming application with real-time audio visualization and dynamic display features.
+# TapForNerd Radio System Improvement Documentation
 
 ## Overview
 
-TapForNerd Radio is a Flask-based music streaming application that provides:
-- Music library management
-- Playlist creation and management
-- Real-time audio visualization
-- Dynamic display text for streaming overlays
-- Admin interface for content management
+This documentation outlines the plan to enhance the TapForNerd Radio system with improved ad management, system architecture, and user interface capabilities.
+
+## Documents
+
+### [PLAN.md](PLAN.md)
+Comprehensive overview of the system improvement plan including:
+- Current system analysis
+- Improvement areas
+- Implementation plan
+- Success metrics
+- Maintenance procedures
+- Risk management
+- Future considerations
+
+### [SPECS.md](SPECS.md)
+Technical specifications including:
+- Database schema
+- API endpoints
+- Module structure
+- Background tasks
+- Caching strategy
+- Frontend components
+- Error handling
+- Monitoring
+- Security
+- Testing strategy
+- Deployment requirements
+
+### [PHASES.md](PHASES.md)
+Detailed implementation timeline including:
+- Phase 1: Foundation (Weeks 1-2)
+- Phase 2: Features (Weeks 3-4)
+- Phase 3: Enhancement (Weeks 5-6)
+- Phase 4: Polish (Weeks 7-8)
+- Success criteria
+- Monitoring & maintenance
+- Post-launch plan
+- Future development roadmap
+
+## Key Features
+
+### Ad Campaign Management
+- Campaign creation and management
+- Asset upload and organization
+- Scheduling and targeting
+- Performance analytics
+
+### System Architecture
+- Modular design
+- Background processing
+- Caching layer
+- Performance optimization
+
+### User Interface
+- Enhanced remote control
+- Improved playlist management
+- Campaign dashboard
+- Analytics visualization
 
 ## Getting Started
 
-### Prerequisites
+1. Review [PLAN.md](PLAN.md) for overall strategy
+2. Check [SPECS.md](SPECS.md) for technical details
+3. Follow [PHASES.md](PHASES.md) for implementation timeline
 
-- Python 3.x
-- Flask
-- SQLite3
-- Modern web browser with Web Audio API support
+## Contributing
 
-### Installation
+When contributing to this project:
+1. Follow the modular architecture
+2. Add appropriate tests
+3. Update documentation
+4. Follow code style guidelines
 
-1. Clone the repository
-2. Install dependencies:
-```bash
-pip install flask flask-cors mutagen
-```
+## Contact
 
-3. Initialize the database:
-```bash
-flask init-db
-```
-
-4. Start the server:
-```bash
-python app.py
-```
-
-5. Access the application:
-- Admin interface: http://localhost:5000/
-- Display window: http://localhost:5000/display
-
-## Quick Start Guide
-
-1. **Upload Music**
-   - Drag and drop audio files into the Media Library section
-   - Click "Scan Media" to detect new files
-
-2. **Create Playlists**
-   - Click "New Playlist" to create a playlist
-   - Drag songs from the Media Library to your playlist
-   - Reorder songs by dragging within the playlist
-
-3. **Start Playback**
-   - Click "Play" on any playlist to begin playback
-   - The display window will open automatically
-   - Use playback controls to manage playback
-
-4. **Customize Display**
-   - Update marquee text to show custom messages
-   - Modify footer text
-   - Toggle fullscreen for optimal viewing
-
-## Documentation
-
-- [Architecture](ARCHITECTURE.md) - System design and components
-- [Features](FEATURES.md) - Detailed feature documentation
-- [API](API.md) - API endpoints documentation
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+For questions or support:
+- Project Lead: [Name]
+- Technical Lead: [Name]
+- Documentation: [Name]

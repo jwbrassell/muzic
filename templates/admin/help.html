@@ -1,0 +1,305 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Help Documentation - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Help Documentation</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print
+        </button>
+    </div>
+</div>
+
+<!-- Documentation Content -->
+<div class="row">
+    <div class="col-md-3">
+        <!-- Navigation -->
+        <div class="card mb-4 sticky-top" style="top: 1rem;">
+            <div class="card-body">
+                <nav id="tableOfContents" class="nav flex-column">
+                    <a class="nav-link" href="#getting-started">Getting Started</a>
+                    <a class="nav-link" href="#media-management">Media Management</a>
+                    <a class="nav-link" href="#playlist-management">Playlist Management</a>
+                    <a class="nav-link" href="#ad-management">Ad Management</a>
+                    <a class="nav-link" href="#system-management">System Management</a>
+                    <a class="nav-link" href="#troubleshooting">Troubleshooting</a>
+                    <a class="nav-link" href="#api-reference">API Reference</a>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <!-- Getting Started -->
+        <section id="getting-started" class="mb-5">
+            <h3>Getting Started</h3>
+            <p>Welcome to the TapForNerd Radio Admin Interface. This guide will help you understand and use the various features available in the admin panel.</p>
+            
+            <h4 class="mt-4">Dashboard Overview</h4>
+            <p>The dashboard provides a quick overview of your radio station's performance, including:</p>
+            <ul>
+                <li>Active campaigns and their performance metrics</li>
+                <li>Recent activity and system events</li>
+                <li>Quick access to common tasks</li>
+            </ul>
+            
+            <h4 class="mt-4">Navigation</h4>
+            <p>The main navigation menu is organized into several sections:</p>
+            <ul>
+                <li><strong>Media:</strong> Manage your audio and video content</li>
+                <li><strong>Playlists:</strong> Create and manage playback schedules</li>
+                <li><strong>Advertising:</strong> Manage ad campaigns and schedules</li>
+                <li><strong>System:</strong> Configure and monitor system settings</li>
+            </ul>
+        </section>
+
+        <!-- Media Management -->
+        <section id="media-management" class="mb-5">
+            <h3>Media Management</h3>
+            
+            <h4 class="mt-4">Media Library</h4>
+            <p>The media library allows you to:</p>
+            <ul>
+                <li>Upload audio and video files</li>
+                <li>Organize content with tags</li>
+                <li>Preview media files</li>
+                <li>Edit metadata</li>
+            </ul>
+            
+            <h4 class="mt-4">Supported Formats</h4>
+            <p>The system supports the following media formats:</p>
+            <ul>
+                <li><strong>Audio:</strong> MP3, WAV</li>
+                <li><strong>Video:</strong> MP4, WebM</li>
+            </ul>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                Maximum file size is configurable in system settings.
+            </div>
+        </section>
+
+        <!-- Playlist Management -->
+        <section id="playlist-management" class="mb-5">
+            <h3>Playlist Management</h3>
+            
+            <h4 class="mt-4">Creating Playlists</h4>
+            <p>To create a new playlist:</p>
+            <ol>
+                <li>Click "Create Playlist" in the playlists section</li>
+                <li>Enter a name and description</li>
+                <li>Add media items from the library</li>
+                <li>Configure playback settings (shuffle, repeat)</li>
+                <li>Save the playlist</li>
+            </ol>
+            
+            <h4 class="mt-4">Scheduling</h4>
+            <p>Playlists can be scheduled to play at specific times:</p>
+            <ul>
+                <li>One-time playback</li>
+                <li>Daily schedules</li>
+                <li>Weekly schedules</li>
+            </ul>
+        </section>
+
+        <!-- Ad Management -->
+        <section id="ad-management" class="mb-5">
+            <h3>Ad Management</h3>
+            
+            <h4 class="mt-4">Campaign Management</h4>
+            <p>Create and manage advertising campaigns:</p>
+            <ul>
+                <li>Set campaign duration and target impressions</li>
+                <li>Upload ad assets (audio/video)</li>
+                <li>Configure playback schedules</li>
+                <li>Monitor performance metrics</li>
+            </ul>
+            
+            <h4 class="mt-4">Analytics</h4>
+            <p>Track campaign performance with detailed analytics:</p>
+            <ul>
+                <li>Impression counts</li>
+                <li>Completion rates</li>
+                <li>Time distribution</li>
+                <li>Asset performance comparison</li>
+            </ul>
+        </section>
+
+        <!-- System Management -->
+        <section id="system-management" class="mb-5">
+            <h3>System Management</h3>
+            
+            <h4 class="mt-4">System Status</h4>
+            <p>Monitor system health and performance:</p>
+            <ul>
+                <li>CPU and memory usage</li>
+                <li>Disk space utilization</li>
+                <li>Service status</li>
+                <li>Recent system events</li>
+            </ul>
+            
+            <h4 class="mt-4">Logs</h4>
+            <p>Access and analyze system logs:</p>
+            <ul>
+                <li>Filter by severity level</li>
+                <li>Search by component or message</li>
+                <li>Export logs for analysis</li>
+            </ul>
+            
+            <h4 class="mt-4">Settings</h4>
+            <p>Configure system settings:</p>
+            <ul>
+                <li>Application settings</li>
+                <li>Media storage configuration</li>
+                <li>Database settings</li>
+                <li>Logging preferences</li>
+                <li>Cache configuration</li>
+            </ul>
+        </section>
+
+        <!-- Troubleshooting -->
+        <section id="troubleshooting" class="mb-5">
+            <h3>Troubleshooting</h3>
+            
+            <h4 class="mt-4">Common Issues</h4>
+            <div class="accordion" id="troubleshootingAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#issue1">
+                            Media files not playing
+                        </button>
+                    </h2>
+                    <div id="issue1" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                        <div class="accordion-body">
+                            <ol>
+                                <li>Check if the file format is supported</li>
+                                <li>Verify file permissions</li>
+                                <li>Check system logs for errors</li>
+                                <li>Ensure media storage path is correctly configured</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#issue2">
+                            Scheduled playlists not running
+                        </button>
+                    </h2>
+                    <div id="issue2" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                        <div class="accordion-body">
+                            <ol>
+                                <li>Verify scheduler service is running</li>
+                                <li>Check timezone settings</li>
+                                <li>Review schedule configuration</li>
+                                <li>Check system logs for scheduling errors</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#issue3">
+                            Performance issues
+                        </button>
+                    </h2>
+                    <div id="issue3" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                        <div class="accordion-body">
+                            <ol>
+                                <li>Monitor system resources</li>
+                                <li>Check database performance</li>
+                                <li>Review cache settings</li>
+                                <li>Optimize media file formats</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- API Reference -->
+        <section id="api-reference" class="mb-5">
+            <h3>API Reference</h3>
+            
+            <h4 class="mt-4">Authentication</h4>
+            <p>All API endpoints require authentication using an API key:</p>
+            <pre class="bg-light p-3"><code>Authorization: Bearer your-api-key-here</code></pre>
+            
+            <h4 class="mt-4">Available Endpoints</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Method</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>/api/v1/media</code></td>
+                            <td>GET</td>
+                            <td>List media files</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/playlists</code></td>
+                            <td>GET</td>
+                            <td>List playlists</td>
+                        </tr>
+                        <tr>
+                            <td><code>/api/v1/ads/campaigns</code></td>
+                            <td>GET</td>
+                            <td>List ad campaigns</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+                <i class="fas fa-info-circle"></i>
+                For detailed API documentation, refer to the <a href="/docs/api" target="_blank">API Documentation</a>.
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Highlight current section in navigation
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                document.querySelectorAll('#tableOfContents .nav-link').forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href') === '#' + entry.target.id) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+        });
+    }, { threshold: 0.5 });
+    
+    document.querySelectorAll('section[id]').forEach(section => {
+        observer.observe(section);
+    });
+    
+    // Smooth scroll to sections
+    document.querySelectorAll('#tableOfContents .nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = link.getAttribute('href');
+            document.querySelector(targetId).scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'start'
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

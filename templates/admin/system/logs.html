@@ -1,0 +1,434 @@
+{% extends "admin/base.html" %}
+
+{% block title %}System Logs - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">System Logs</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBtn">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="exportBtn">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger" id="clearBtn">
+            <i class="fas fa-trash"></i> Clear Logs
+        </button>
+    </div>
+</div>
+
+<!-- Log Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stats-card bg-info text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-info">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <h3 class="card-title h2" id="infoCount">-</h3>
+                <p class="card-text">Info Logs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-warning text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 class="card-title h2" id="warningCount">-</h3>
+                <p class="card-text">Warning Logs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-danger text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-danger">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <h3 class="card-title h2" id="errorCount">-</h3>
+                <p class="card-text">Error Logs</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-secondary text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-secondary">
+                    <i class="fas fa-database"></i>
+                </div>
+                <h3 class="card-title h2" id="totalLogs">-</h3>
+                <p class="card-text">Total Logs</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Filters -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Log Level</label>
+                        <select class="form-select" id="levelFilter">
+                            <option value="">All Levels</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                            <option value="debug">Debug</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Component</label>
+                        <select class="form-select" id="componentFilter">
+                            <option value="">All Components</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Search</label>
+                        <input type="text" class="form-control" id="searchFilter" placeholder="Search logs...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Time Range</label>
+                        <select class="form-select" id="timeFilter">
+                            <option value="1h">Last Hour</option>
+                            <option value="24h" selected>Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Table -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 160px;">Timestamp</th>
+                                <th style="width: 100px;">Level</th>
+                                <th style="width: 150px;">Component</th>
+                                <th>Message</th>
+                                <th style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsList">
+                            <tr>
+                                <td colspan="5" class="text-center">Loading logs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav aria-label="Log navigation" class="mt-3">
+                    <ul class="pagination justify-content-center" id="pagination">
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1">Previous</a>
+                        </li>
+                        <li class="page-item active">
+                            <a class="page-link" href="#">1</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="#">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Details Modal -->
+<div class="modal fade" id="logDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Log Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Timestamp</dt>
+                    <dd class="col-sm-9" id="detailTimestamp"></dd>
+                    
+                    <dt class="col-sm-3">Level</dt>
+                    <dd class="col-sm-9" id="detailLevel"></dd>
+                    
+                    <dt class="col-sm-3">Component</dt>
+                    <dd class="col-sm-9" id="detailComponent"></dd>
+                    
+                    <dt class="col-sm-3">Message</dt>
+                    <dd class="col-sm-9" id="detailMessage"></dd>
+                    
+                    <dt class="col-sm-3">Stack Trace</dt>
+                    <dd class="col-sm-9">
+                        <pre class="bg-light p-2" id="detailStack"></pre>
+                    </dd>
+                    
+                    <dt class="col-sm-3">Additional Data</dt>
+                    <dd class="col-sm-9">
+                        <pre class="bg-light p-2" id="detailData"></pre>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentPage = 1;
+    
+    // Load logs
+    function loadLogs(page = 1) {
+        currentPage = page;
+        const params = new URLSearchParams({
+            page,
+            level: document.getElementById('levelFilter').value,
+            component: document.getElementById('componentFilter').value,
+            search: document.getElementById('searchFilter').value,
+            time_range: document.getElementById('timeFilter').value
+        });
+        
+        fetch(`/api/v1/system/logs?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update stats
+                document.getElementById('infoCount').textContent = formatNumber(data.stats.info_count);
+                document.getElementById('warningCount').textContent = formatNumber(data.stats.warning_count);
+                document.getElementById('errorCount').textContent = formatNumber(data.stats.error_count);
+                document.getElementById('totalLogs').textContent = formatNumber(data.stats.total_logs);
+                
+                // Update logs table
+                const tbody = document.getElementById('logsList');
+                tbody.innerHTML = data.logs.map(log => `
+                    <tr class="${getRowClass(log.level)}">
+                        <td>${formatDate(log.timestamp)}</td>
+                        <td>
+                            <span class="badge bg-${getLevelColor(log.level)}">
+                                ${log.level.toUpperCase()}
+                            </span>
+                        </td>
+                        <td>${log.component}</td>
+                        <td class="text-truncate" style="max-width: 500px;">
+                            ${log.message}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" 
+                                    onclick="showLogDetails(${log.id})">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                updatePagination(data.pagination);
+            })
+            .catch(error => {
+                console.error('Error loading logs:', error);
+                document.getElementById('logsList').innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-danger">
+                            Error loading logs
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+    
+    // Load components for filter
+    function loadComponents() {
+        fetch('/api/v1/system/logs/components')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('componentFilter');
+                select.innerHTML = `
+                    <option value="">All Components</option>
+                    ${data.components.map(component => `
+                        <option value="${component}">${component}</option>
+                    `).join('')}
+                `;
+            })
+            .catch(error => console.error('Error loading components:', error));
+    }
+    
+    // Format helpers
+    function formatNumber(value) {
+        return new Intl.NumberFormat().format(value);
+    }
+    
+    function formatDate(dateString) {
+        return new Date(dateString).toLocaleString();
+    }
+    
+    function getLevelColor(level) {
+        switch (level.toLowerCase()) {
+            case 'info': return 'info';
+            case 'warning': return 'warning';
+            case 'error': return 'danger';
+            case 'debug': return 'secondary';
+            default: return 'secondary';
+        }
+    }
+    
+    function getRowClass(level) {
+        switch (level.toLowerCase()) {
+            case 'error': return 'table-danger';
+            case 'warning': return 'table-warning';
+            default: return '';
+        }
+    }
+    
+    // Log details
+    window.showLogDetails = function(logId) {
+        fetch(`/api/v1/system/logs/${logId}`)
+            .then(response => response.json())
+            .then(log => {
+                document.getElementById('detailTimestamp').textContent = formatDate(log.timestamp);
+                document.getElementById('detailLevel').innerHTML = `
+                    <span class="badge bg-${getLevelColor(log.level)}">
+                        ${log.level.toUpperCase()}
+                    </span>
+                `;
+                document.getElementById('detailComponent').textContent = log.component;
+                document.getElementById('detailMessage').textContent = log.message;
+                document.getElementById('detailStack').textContent = log.stack_trace || 'No stack trace available';
+                document.getElementById('detailData').textContent = 
+                    log.additional_data ? JSON.stringify(log.additional_data, null, 2) : 'No additional data';
+                
+                new bootstrap.Modal(document.getElementById('logDetailsModal')).show();
+            })
+            .catch(error => {
+                console.error('Error loading log details:', error);
+                alert('Failed to load log details');
+            });
+    };
+    
+    // Clear logs
+    document.getElementById('clearBtn').addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to clear all logs? This action cannot be undone.')) return;
+        
+        try {
+            const response = await fetch('/api/v1/system/logs', {
+                method: 'DELETE'
+            });
+            
+            if (!response.ok) throw new Error('Failed to clear logs');
+            
+            loadLogs();
+            
+        } catch (error) {
+            console.error('Error clearing logs:', error);
+            alert('Failed to clear logs');
+        }
+    });
+    
+    // Export logs
+    document.getElementById('exportBtn').addEventListener('click', () => {
+        const params = new URLSearchParams({
+            level: document.getElementById('levelFilter').value,
+            component: document.getElementById('componentFilter').value,
+            search: document.getElementById('searchFilter').value,
+            time_range: document.getElementById('timeFilter').value,
+            format: 'csv'
+        });
+        
+        window.location.href = `/api/v1/system/logs/export?${params}`;
+    });
+    
+    // Filter handlers
+    const filterForm = document.getElementById('filterForm');
+    filterForm.querySelectorAll('select, input').forEach(element => {
+        element.addEventListener('change', () => loadLogs(1));
+    });
+    
+    document.getElementById('searchFilter').addEventListener('input', debounce(() => loadLogs(1), 500));
+    
+    // Refresh button
+    document.getElementById('refreshBtn').addEventListener('click', () => loadLogs(currentPage));
+    
+    // Debounce helper
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    function updatePagination(pagination) {
+        const ul = document.getElementById('pagination');
+        const pages = [];
+        
+        // Previous button
+        pages.push(`
+            <li class="page-item ${pagination.page === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="return loadLogs(${pagination.page - 1})">
+                    Previous
+                </a>
+            </li>
+        `);
+        
+        // Page numbers
+        for (let i = 1; i <= pagination.total_pages; i++) {
+            if (
+                i === 1 || 
+                i === pagination.total_pages || 
+                (i >= pagination.page - 2 && i <= pagination.page + 2)
+            ) {
+                pages.push(`
+                    <li class="page-item ${i === pagination.page ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="return loadLogs(${i})">${i}</a>
+                    </li>
+                `);
+            } else if (
+                i === pagination.page - 3 || 
+                i === pagination.page + 3
+            ) {
+                pages.push(`
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#">...</a>
+                    </li>
+                `);
+            }
+        }
+        
+        // Next button
+        pages.push(`
+            <li class="page-item ${pagination.page === pagination.total_pages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="return loadLogs(${pagination.page + 1})">
+                    Next
+                </a>
+            </li>
+        `);
+        
+        ul.innerHTML = pages.join('');
+    }
+    
+    // Initial load
+    loadLogs();
+    loadComponents();
+});
+</script>
+{% endblock %}

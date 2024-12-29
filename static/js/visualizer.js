@@ -1,3 +1,8 @@
+import { BarsVisualizer } from './visualizations/bars.js';
+import { CirclesVisualizer } from './visualizations/circles.js';
+import { WavesVisualizer } from './visualizations/waves.js';
+import { FaceVisualizer } from './visualizations/face.js';
+
 class AudioVisualizer {
     constructor() {
         this.audioContext = null;
@@ -9,77 +14,89 @@ class AudioVisualizer {
         this.animationId = null;
         this.isInitialized = false;
         this.currentVisualizer = null;
-        this.visualizerTypes = [BarsVisualizer, CirclesVisualizer, WavesVisualizer];
-        this.initializationPromise = null;
+        this.visualizerTypes = [BarsVisualizer, CirclesVisualizer, WavesVisualizer, FaceVisualizer];
+        this.currentVisualizerIndex = 0;
+        this.connectedElement = null;
+        
+        // Keep track of all audio nodes for proper cleanup
+        this.nodes = new Set();
         
         // Add resize listener once during construction
         window.addEventListener('resize', () => this.resizeCanvas());
     }
 
     async initialize(audioElement) {
-        // If already initializing, wait for that to complete
-        if (this.initializationPromise) {
-            return this.initializationPromise;
-        }
-
-        // Create new initialization promise
-        this.initializationPromise = (async () => {
-            try {
-                // Only create new context if none exists or if closed
-                if (!this.audioContext || this.audioContext.state === 'closed') {
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    this.analyser = this.audioContext.createAnalyser();
-                    this.source = this.audioContext.createMediaElementSource(audioElement);
-                    this.source.connect(this.analyser);
-                    this.analyser.connect(this.audioContext.destination);
-                } else if (this.audioContext.state === 'suspended') {
-                    // Resume existing context if suspended
+        try {
+            console.log('Initializing audio visualizer...');
+            
+            // If we're already connected to this element and context is active, just resume
+            if (this.connectedElement === audioElement && 
+                this.audioContext && 
+                this.source && 
+                this.audioContext.state !== 'closed') {
+                console.log('Already connected to this audio element');
+                if (this.audioContext.state === 'suspended') {
                     await this.audioContext.resume();
                 }
-
-                // Set up analyzer configuration
-                this.analyser.fftSize = 256;
-                const bufferLength = this.analyser.frequencyBinCount;
-                this.dataArray = new Uint8Array(bufferLength);
-                
-                // Set canvas size
-                this.resizeCanvas();
-                
-                // Initialize with random visualizer if none exists
-                if (!this.currentVisualizer) {
-                    this.switchVisualizer();
-                }
-                
-                this.isInitialized = true;
-                
-                // Start drawing if not already
-                if (!this.animationId) {
-                    this.draw();
-                }
-            } catch (error) {
-                console.error('Error initializing audio context:', error);
-                this.isInitialized = false;
-                // Try to recover by closing and recreating context
-                try {
-                    if (this.audioContext) {
-                        await this.audioContext.close();
-                    }
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    this.analyser = this.audioContext.createAnalyser();
-                    this.source = this.audioContext.createMediaElementSource(audioElement);
-                    this.source.connect(this.analyser);
-                    this.analyser.connect(this.audioContext.destination);
-                    this.isInitialized = true;
-                } catch (retryError) {
-                    console.error('Failed to recover audio context:', retryError);
-                    throw retryError;
-                }
-            } finally {
-                this.initializationPromise = null;
+                return;
             }
-        })();
+            
+            // Clean up existing connections but preserve context if possible
+            if (this.source) {
+                this.source.disconnect();
+                this.source = null;
+            }
+            
+            if (this.analyser) {
+                this.analyser.disconnect();
+            }
+            
+            // Create or resume audio context
+            if (!this.audioContext || this.audioContext.state === 'closed') {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } else if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            
+            // Create and configure analyser
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 256;
+            this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+            
+            // Create and connect new source
+            console.log('Creating new media element source...');
+            this.source = this.audioContext.createMediaElementSource(audioElement);
+            
+            // Connect nodes: source -> analyser -> destination
+            this.source.connect(this.analyser);
+            this.analyser.connect(this.audioContext.destination);
+            
+            // Track all nodes for cleanup
+            this.nodes.add(this.source);
+            this.nodes.add(this.analyser);
+            
+            // Store reference to connected element
+            this.connectedElement = audioElement;
+            
+            // Set canvas size
+            this.resizeCanvas();
+            
+            // Initialize or maintain visualizer
+            if (!this.currentVisualizer) {
+                this.switchVisualizer();
+            }
+            
+            console.log('Audio visualizer initialized successfully');
+            this.isInitialized = true;
+            this.draw();
 
-        return this.initializationPromise;
+        } catch (error) {
+            console.error('Error initializing audio context:', error);
+            this.isInitialized = false;
+            // Attempt cleanup on error
+            await this.cleanup();
+            throw error;
+        }
     }
 
     resizeCanvas() {
@@ -89,8 +106,12 @@ class AudioVisualizer {
         this.canvas.height = container.offsetHeight;
     }
 
-    switchVisualizer() {
-        const VisualizerType = this.visualizerTypes[Math.floor(Math.random() * this.visualizerTypes.length)];
+    switchVisualizer(forceNext = false) {
+        if (forceNext) {
+            // Move to next visualizer
+            this.currentVisualizerIndex = (this.currentVisualizerIndex + 1) % this.visualizerTypes.length;
+        }
+        const VisualizerType = this.visualizerTypes[this.currentVisualizerIndex];
         this.currentVisualizer = new VisualizerType(this.canvas, this.analyser);
     }
 
@@ -113,21 +134,48 @@ class AudioVisualizer {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
         }
-        // Don't reset initialization state - we might want to resume
     }
 
     async cleanup() {
+        console.log('Cleaning up audio visualizer...');
         this.stop();
-        if (this.audioContext) {
+        
+        // Disconnect nodes but don't close context
+        if (this.source) {
+            try {
+                this.source.disconnect();
+            } catch (error) {
+                console.error('Error disconnecting source:', error);
+            }
+            this.source = null;
+        }
+        
+        if (this.analyser) {
+            try {
+                this.analyser.disconnect();
+            } catch (error) {
+                console.error('Error disconnecting analyser:', error);
+            }
+            this.analyser = null;
+        }
+        
+        // Clear other references
+        this.connectedElement = null;
+        this.dataArray = null;
+        this.isInitialized = false;
+        
+        // Only close audio context if it exists and isn't already closed
+        if (this.audioContext && this.audioContext.state !== 'closed') {
             try {
                 await this.audioContext.close();
                 this.audioContext = null;
-                this.analyser = null;
-                this.source = null;
-                this.isInitialized = false;
             } catch (error) {
-                console.error('Error cleaning up audio context:', error);
+                console.error('Error closing audio context:', error);
             }
         }
+        
+        console.log('Audio visualizer cleanup complete');
     }
 }
+
+export { AudioVisualizer };

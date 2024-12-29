@@ -1,0 +1,391 @@
+{% extends "admin/base.html" %}
+
+{% block title %}System Settings - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">System Settings</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="resetBtn">
+            <i class="fas fa-undo"></i> Reset to Default
+        </button>
+    </div>
+</div>
+
+<!-- Settings Form -->
+<div class="row">
+    <div class="col-md-12">
+        <form id="settingsForm">
+            <!-- Application Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog"></i> Application Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="appName" class="form-label">Application Name</label>
+                                <input type="text" class="form-control" id="appName" name="app.name">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="appEnvironment" class="form-label">Environment</label>
+                                <select class="form-select" id="appEnvironment" name="app.environment">
+                                    <option value="production">Production</option>
+                                    <option value="staging">Staging</option>
+                                    <option value="development">Development</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="appHost" class="form-label">Host</label>
+                                <input type="text" class="form-control" id="appHost" name="app.host">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="appPort" class="form-label">Port</label>
+                                <input type="number" class="form-control" id="appPort" name="app.port">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="appDebug" name="app.debug">
+                            <label class="form-check-label" for="appDebug">
+                                Enable Debug Mode
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Media Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-photo-video"></i> Media Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mediaPath" class="form-label">Media Storage Path</label>
+                                <input type="text" class="form-control" id="mediaPath" name="media.storage_path">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mediaMaxSize" class="form-label">Maximum File Size (MB)</label>
+                                <input type="number" class="form-control" id="mediaMaxSize" name="media.max_size">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mediaFormats" class="form-label">Allowed Formats</label>
+                                <input type="text" class="form-control" id="mediaFormats" name="media.allowed_formats" 
+                                       placeholder="mp3,wav,mp4,webm">
+                                <div class="form-text">Comma-separated list of file extensions</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mediaCache" class="form-label">Cache Duration (hours)</label>
+                                <input type="number" class="form-control" id="mediaCache" name="media.cache_duration">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-database"></i> Database Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="dbPath" class="form-label">Database Path</label>
+                                <input type="text" class="form-control" id="dbPath" name="database.path">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="dbBackupPath" class="form-label">Backup Path</label>
+                                <input type="text" class="form-control" id="dbBackupPath" name="database.backup_path">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="dbBackupInterval" class="form-label">Backup Interval (hours)</label>
+                                <input type="number" class="form-control" id="dbBackupInterval" name="database.backup_interval">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logging Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt"></i> Logging Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="logPath" class="form-label">Log Directory</label>
+                                <input type="text" class="form-control" id="logPath" name="logging.path">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="logLevel" class="form-label">Log Level</label>
+                                <select class="form-select" id="logLevel" name="logging.level">
+                                    <option value="debug">Debug</option>
+                                    <option value="info">Info</option>
+                                    <option value="warning">Warning</option>
+                                    <option value="error">Error</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="logRetention" class="form-label">Log Retention (days)</label>
+                                <input type="number" class="form-control" id="logRetention" name="logging.retention_days">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="logFormat" class="form-label">Log Format</label>
+                                <input type="text" class="form-control" id="logFormat" name="logging.format">
+                                <div class="form-text">Python logging format string</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="logRotate" name="logging.rotate">
+                            <label class="form-check-label" for="logRotate">
+                                Enable Log Rotation
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cache Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-memory"></i> Cache Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cacheType" class="form-label">Cache Type</label>
+                                <select class="form-select" id="cacheType" name="cache.type">
+                                    <option value="memory">In-Memory</option>
+                                    <option value="redis">Redis</option>
+                                    <option value="file">File System</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cacheTTL" class="form-label">Default TTL (seconds)</label>
+                                <input type="number" class="form-control" id="cacheTTL" name="cache.ttl">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="redisSettings" class="d-none">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="redisHost" class="form-label">Redis Host</label>
+                                    <input type="text" class="form-control" id="redisHost" name="cache.redis.host">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="redisPort" class="form-label">Redis Port</label>
+                                    <input type="number" class="form-control" id="redisPort" name="cache.redis.port">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="fileSettings" class="d-none">
+                        <div class="mb-3">
+                            <label for="cachePath" class="form-label">Cache Directory</label>
+                            <input type="text" class="form-control" id="cachePath" name="cache.file.path">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="text-end mb-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load current settings
+    function loadSettings() {
+        fetch('/api/v1/system/settings')
+            .then(response => response.json())
+            .then(settings => {
+                // Populate form fields
+                Object.entries(flattenObject(settings)).forEach(([key, value]) => {
+                    const element = document.querySelector(`[name="${key}"]`);
+                    if (element) {
+                        if (element.type === 'checkbox') {
+                            element.checked = value;
+                        } else {
+                            element.value = value;
+                        }
+                    }
+                });
+                
+                // Handle cache type visibility
+                updateCacheSettings();
+            })
+            .catch(error => {
+                console.error('Error loading settings:', error);
+                alert('Failed to load settings');
+            });
+    }
+    
+    // Save settings
+    document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const settings = {};
+        
+        formData.forEach((value, key) => {
+            const parts = key.split('.');
+            let current = settings;
+            
+            for (let i = 0; i < parts.length - 1; i++) {
+                current[parts[i]] = current[parts[i]] || {};
+                current = current[parts[i]];
+            }
+            
+            const lastPart = parts[parts.length - 1];
+            if (value === 'on') {
+                current[lastPart] = true;
+            } else if (value === '') {
+                current[lastPart] = null;
+            } else if (!isNaN(value) && value !== '') {
+                current[lastPart] = Number(value);
+            } else {
+                current[lastPart] = value;
+            }
+        });
+        
+        try {
+            const response = await fetch('/api/v1/system/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings)
+            });
+            
+            if (!response.ok) throw new Error('Failed to save settings');
+            
+            alert('Settings saved successfully');
+            loadSettings();
+            
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            alert('Failed to save settings');
+        }
+    });
+    
+    // Reset settings
+    document.getElementById('resetBtn').addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to reset all settings to their default values?')) return;
+        
+        try {
+            const response = await fetch('/api/v1/system/settings/reset', {
+                method: 'POST'
+            });
+            
+            if (!response.ok) throw new Error('Failed to reset settings');
+            
+            alert('Settings reset successfully');
+            loadSettings();
+            
+        } catch (error) {
+            console.error('Error resetting settings:', error);
+            alert('Failed to reset settings');
+        }
+    });
+    
+    // Cache type handling
+    document.getElementById('cacheType').addEventListener('change', updateCacheSettings);
+    
+    function updateCacheSettings() {
+        const cacheType = document.getElementById('cacheType').value;
+        const redisSettings = document.getElementById('redisSettings');
+        const fileSettings = document.getElementById('fileSettings');
+        
+        redisSettings.classList.add('d-none');
+        fileSettings.classList.add('d-none');
+        
+        if (cacheType === 'redis') {
+            redisSettings.classList.remove('d-none');
+        } else if (cacheType === 'file') {
+            fileSettings.classList.remove('d-none');
+        }
+    }
+    
+    // Helper to flatten nested object
+    function flattenObject(obj, prefix = '') {
+        return Object.keys(obj).reduce((acc, key) => {
+            const pre = prefix.length ? prefix + '.' : '';
+            if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                Object.assign(acc, flattenObject(obj[key], pre + key));
+            } else {
+                acc[pre + key] = obj[key];
+            }
+            return acc;
+        }, {});
+    }
+    
+    // Initial load
+    loadSettings();
+});
+</script>
+{% endblock %}

@@ -126,66 +126,16 @@ function createPlaylist() {
         .catch(error => console.error('Error:', error));
 }
 
-async function playPlaylist(playlistId) {
-    console.log('Starting playlist:', playlistId);
-    
-    // First, open the display window
-    const display = openDisplayWindow();
+function playPlaylist(playlistId) {
+    // Open display window first
+    const display = window.open('/display?playlist=' + playlistId, '_blank', 'width=800,height=600');
     if (!display) {
         console.error('Could not open display window');
         return;
     }
-
-    try {
-        // Create a promise that resolves when the display window loads
-        const windowLoadPromise = new Promise((resolve, reject) => {
-            const checkWindow = setInterval(() => {
-                if (display.document && display.document.readyState === 'complete') {
-                    clearInterval(checkWindow);
-                    clearTimeout(timeout);
-                    resolve();
-                }
-            }, 100);
-
-            // Timeout after 5 seconds
-            const timeout = setTimeout(() => {
-                clearInterval(checkWindow);
-                reject(new Error('Display window load timeout'));
-            }, 5000);
-        });
-
-        // Wait for window to load
-        await windowLoadPromise;
-
-        // Start the playlist
-        const response = await fetch('/api/play', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playlist_id: playlistId })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (data.error) {
-            throw new Error(data.error);
-        }
-
-        console.log('Playlist started successfully:', data);
-
-        // Send play command to display window
-        display.postMessage('play', '*');
-
-    } catch (error) {
-        console.error('Error starting playlist:', error);
-        // If there was an error, close the display window and try again
-        if (display && !display.closed) {
-            display.close();
-        }
-        setTimeout(() => playPlaylist(playlistId), 1000);
-    }
+    
+    // Navigate main window to player
+    window.location.href = '/?playlist=' + playlistId;
 }
 
 function savePlaylist(playlistId) {

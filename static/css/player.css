@@ -1,0 +1,197 @@
+body { 
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    background: #000;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#mainHeader {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    background: rgba(13, 110, 253, 0.1);
+    border-bottom: 2px solid #0d6efd;
+    justify-content: space-between;
+}
+
+#brandLogo, #brandLogoRight {
+    width: 100px;
+    height: auto;
+}
+
+#brandLogo {
+    margin-right: 20px;
+}
+
+#brandLogoRight {
+    margin-left: 20px;
+}
+
+.headerText {
+    flex: 1;
+    text-align: center;
+}
+
+#mainHeader h1 {
+    margin: 0;
+    font-size: 36px;
+    color: #0d6efd;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+#songTitle {
+    margin-top: 10px;
+    font-size: 24px;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+#header {
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+body:hover #header {
+    opacity: 1;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    margin-right: 15px;
+}
+
+.controls i {
+    color: white;
+    font-size: 24px;
+    transition: color 0.3s ease;
+}
+
+.controls i:hover {
+    color: #0d6efd;
+}
+
+#nowPlaying {
+    font-size: 24px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+#progressContainer {
+    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10;
+}
+
+#progressBar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    cursor: pointer;
+    margin-bottom: 5px;
+}
+
+#progressFill {
+    width: 0%;
+    height: 100%;
+    background: #0d6efd;
+    border-radius: 2px;
+    transition: width 0.1s linear;
+}
+
+#timeInfo {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#nextUpContainer {
+    margin-top: 5px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+#nextUpLabel {
+    color: #0d6efd;
+    margin-right: 5px;
+}
+
+#visualizerContainer {
+    flex: 1;
+    position: relative;
+    background: rgba(0, 0, 0, 0.2);
+    min-height: 0;
+    width: 100%;
+    display: flex;
+}
+
+#visualizer {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+}
+
+#marquee {
+    padding: 10px 0;
+    background: #0d6efd;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.marquee-content {
+    display: inline-block;
+    animation: marquee 40s linear infinite;
+    padding-left: 100%;
+}
+
+@keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+#footer {
+    padding: 15px;
+    background: #212529;
+    color: #0d6efd;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Fullscreen styles */
+:fullscreen {
+    background-color: #000;
+    width: 100vw;
+    height: 100vh;
+}
+
+:-webkit-full-screen {
+    background-color: #000;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Hide address bar in fullscreen */
+:fullscreen #mainHeader {
+    margin-top: env(safe-area-inset-top);
+}
+
+:-webkit-full-screen #mainHeader {
+    margin-top: env(safe-area-inset-top);
+}

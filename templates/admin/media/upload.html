@@ -1,0 +1,226 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Upload Media - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Upload Media</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.href='{{ url_for('admin.media_library') }}'">
+            <i class="fas fa-arrow-left"></i> Back to Library
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <!-- Upload Form -->
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <!-- File Drop Zone -->
+                    <div class="mb-4">
+                        <div id="dropZone" class="border rounded p-5 text-center" 
+                             style="border-style: dashed !important; cursor: pointer;">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <p class="mb-1">Drag and drop files here</p>
+                            <p class="text-muted">or</p>
+                            <input type="file" id="fileInput" multiple accept="audio/*,video/*" class="d-none">
+                            <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                Browse Files
+                            </button>
+                            <p class="text-muted mt-2">
+                                Supported formats: MP3, WAV, MP4, WebM<br>
+                                Maximum file size: 100MB
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Upload Queue -->
+                    <div id="uploadQueue" class="d-none">
+                        <h5>Upload Queue</h5>
+                        <div class="list-group" id="queueList"></div>
+                    </div>
+
+                    <!-- Tags Input -->
+                    <div class="mb-3">
+                        <label class="form-label">Tags</label>
+                        <input type="text" class="form-control" id="tagsInput" placeholder="Add tags (comma separated)">
+                        <div class="form-text">Example: music, background, ambient</div>
+                    </div>
+
+                    <!-- Upload Button -->
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary" id="uploadBtn" disabled>
+                            <i class="fas fa-upload"></i> Start Upload
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadQueue = document.getElementById('uploadQueue');
+    const queueList = document.getElementById('queueList');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const uploadForm = document.getElementById('uploadForm');
+    const tagsInput = document.getElementById('tagsInput');
+    
+    let files = [];
+    
+    // Drag and drop handling
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('bg-light');
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('bg-light');
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('bg-light');
+        
+        const newFiles = Array.from(e.dataTransfer.files).filter(file => {
+            return file.type.startsWith('audio/') || file.type.startsWith('video/');
+        });
+        
+        addFilesToQueue(newFiles);
+    });
+    
+    fileInput.addEventListener('change', () => {
+        const newFiles = Array.from(fileInput.files);
+        addFilesToQueue(newFiles);
+    });
+    
+    function addFilesToQueue(newFiles) {
+        files.push(...newFiles);
+        updateQueue();
+    }
+    
+    function updateQueue() {
+        if (files.length > 0) {
+            uploadQueue.classList.remove('d-none');
+            uploadBtn.disabled = false;
+            
+            queueList.innerHTML = files.map((file, index) => `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">${file.name}</h6>
+                            <small class="text-muted">
+                                ${formatSize(file.size)} | ${file.type}
+                            </small>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                onclick="removeFile(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="progress mt-2 d-none">
+                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            uploadQueue.classList.add('d-none');
+            uploadBtn.disabled = true;
+            queueList.innerHTML = '';
+        }
+    }
+    
+    // Make removeFile function globally accessible
+    window.removeFile = (index) => {
+        files.splice(index, 1);
+        updateQueue();
+    };
+    
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const tags = tagsInput.value.split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0);
+        
+        const formData = new FormData();
+        files.forEach(file => {
+            formData.append('files[]', file);
+        });
+        
+        try {
+            const response = await fetch('/api/v1/media/', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+            
+            const results = await response.json();
+            
+            // Update progress bars based on results
+            results.forEach((result, i) => {
+                const progressElement = queueList.children[i].querySelector('.progress');
+                progressElement.classList.remove('d-none');
+                const progressBar = progressElement.querySelector('.progress-bar');
+                
+                if (result.error) {
+                    progressBar.classList.add('bg-danger');
+                    console.error(`Error uploading ${result.filename}: ${result.error}`);
+                } else {
+                    progressBar.style.width = '100%';
+                    progressBar.classList.add('bg-success');
+                    
+                    // Add tags if upload was successful
+                    if (tags.length > 0 && result.id) {
+                        fetch(`/api/v1/media/${result.id}/tags`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ tags })
+                        }).catch(error => {
+                            console.error(`Error adding tags to ${result.filename}:`, error);
+                        });
+                    }
+                }
+            });
+            
+        } catch (error) {
+            console.error('Upload error:', error);
+            // Show error for all files
+            Array.from(queueList.children).forEach(item => {
+                const progressElement = item.querySelector('.progress');
+                progressElement.classList.remove('d-none');
+                const progressBar = progressElement.querySelector('.progress-bar');
+                progressBar.classList.add('bg-danger');
+            });
+        }
+        
+        // Clear queue after uploads
+        files = [];
+        updateQueue();
+        tagsInput.value = '';
+    });
+    
+    function formatSize(bytes) {
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        while (bytes >= 1024 && i < sizes.length - 1) {
+            bytes /= 1024;
+            i++;
+        }
+        return `${bytes.toFixed(1)} ${sizes[i]}`;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Display</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/media_display.css" rel="stylesheet">
+</head>
+<body>
+    <div id="mainHeader">
+        <img src="/static/tapfornerd.jpg" alt="TapForNerd Logo" id="brandLogo">
+        <div class="headerText">
+            <h1>TapForNerd Media</h1>
+            <div id="songTitle"></div>
+        </div>
+        <img src="/static/tapfornerd_flipped.png" alt="TapForNerd Logo Flipped" id="brandLogoRight">
+    </div>
+    <div id="header">
+        <div id="nowPlaying" style="display: none;"></div>
+        <div class="controls">
+            <i id="playPauseIcon" class="fas fa-play" style="cursor: pointer; margin: 0 10px;"></i>
+            <i id="fullscreenIcon" class="fas fa-expand" style="cursor: pointer; margin: 0 10px;"></i>
+        </div>
+    </div>
+
+    <div id="mediaContainer">
+        <div id="startPlayback">
+            <i class="fas fa-play"></i>
+            Click to Start Playback
+        </div>
+        <div id="visualizerContainer">
+            <canvas id="visualizer"></canvas>
+        </div>
+        <div id="videoContainer">
+            <video id="videoPlayer" preload="auto" controlsList="nodownload"></video>
+        </div>
+    </div>
+
+    <div id="progressContainer">
+        <div id="progressBar">
+            <div id="progressFill"></div>
+        </div>
+        <div id="timeInfo">
+            <span id="currentTime">0:00</span>
+            <span id="duration">0:00</span>
+        </div>
+        <div id="nextUpContainer">
+            <span id="nextUpLabel">Next up:</span>
+            <span id="nextUpSong"></span>
+        </div>
+    </div>
+
+    <div id="marquee">
+        <div class="marquee-content" id="marqueeText">
+            Brought to you by subscribers of Tap For Nerd
+        </div>
+    </div>
+
+    <div id="footer">
+        TapForNerd Media
+    </div>
+
+    <!-- Audio player with all necessary attributes -->
+    <audio id="audioPlayer" 
+           preload="auto" 
+           crossorigin="anonymous"
+           playsinline
+           webkit-playsinline>
+        Your browser does not support the audio element.
+    </audio>
+
+    <!-- Debug info panel -->
+    <div id="debugInfo" style="position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: monospace; font-size: 12px; display: none;">
+        <div>Player State: <span id="debugPlayerState">-</span></div>
+        <div>Current Time: <span id="debugCurrentTime">-</span></div>
+        <div>Duration: <span id="debugDuration">-</span></div>
+        <div>Ready State: <span id="debugReadyState">-</span></div>
+        <div>Network State: <span id="debugNetworkState">-</span></div>
+        <div>Error: <span id="debugError">-</span></div>
+    </div>
+
+    <script type="module" src="/static/js/media/display.js"></script>
+    
+    <!-- Debug mode toggle -->
+    <script>
+        // Press 'd' to toggle debug panel
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'd') {
+                const debugPanel = document.getElementById('debugInfo');
+                debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        // Update debug info every second
+        setInterval(() => {
+            const audio = document.getElementById('audioPlayer');
+            const video = document.getElementById('videoPlayer');
+            const player = audio.src ? audio : video;
+            
+            if (player) {
+                document.getElementById('debugPlayerState').textContent = player.paused ? 'Paused' : 'Playing';
+                document.getElementById('debugCurrentTime').textContent = player.currentTime.toFixed(2);
+                document.getElementById('debugDuration').textContent = player.duration.toFixed(2);
+                document.getElementById('debugReadyState').textContent = player.readyState;
+                document.getElementById('debugNetworkState').textContent = player.networkState;
+                document.getElementById('debugError').textContent = player.error ? player.error.message : 'None';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

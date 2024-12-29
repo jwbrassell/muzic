@@ -1,0 +1,391 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Ad Analytics - TapForNerd Radio Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+    <h1 class="h2">Ad Analytics</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBtn">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="exportBtn">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#dateRangeModal">
+            <i class="fas fa-calendar"></i> Date Range
+        </button>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stats-card bg-primary text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-primary">
+                    <i class="fas fa-eye"></i>
+                </div>
+                <h3 class="card-title h2" id="totalImpressions">-</h3>
+                <p class="card-text">Total Impressions</p>
+                <div class="progress bg-white" style="height: 3px;">
+                    <div class="progress-bar bg-white" style="width: 70%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-success text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-success">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h3 class="card-title h2" id="completionRate">-</h3>
+                <p class="card-text">Completion Rate</p>
+                <div class="progress bg-white" style="height: 3px;">
+                    <div class="progress-bar bg-white" style="width: 60%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-info text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-info">
+                    <i class="fas fa-bullhorn"></i>
+                </div>
+                <h3 class="card-title h2" id="activeCampaigns">-</h3>
+                <p class="card-text">Active Campaigns</p>
+                <div class="progress bg-white" style="height: 3px;">
+                    <div class="progress-bar bg-white" style="width: 85%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card bg-warning text-white">
+            <div class="card-body">
+                <div class="stats-icon bg-white text-warning">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <h3 class="card-title h2" id="totalPlaytime">-</h3>
+                <p class="card-text">Total Playtime</p>
+                <div class="progress bg-white" style="height: 3px;">
+                    <div class="progress-bar bg-white" style="width: 45%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Impressions Over Time</h5>
+                <div class="chart-container">
+                    <canvas id="impressionsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Campaign Distribution</h5>
+                <div class="chart-container">
+                    <canvas id="campaignChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Campaign Performance -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0">Campaign Performance</h5>
+                    <select class="form-select w-auto" id="campaignFilter">
+                        <option value="">All Campaigns</option>
+                    </select>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Campaign</th>
+                                <th>Impressions</th>
+                                <th>Completion Rate</th>
+                                <th>Total Playtime</th>
+                                <th>Progress</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaignList">
+                            <tr>
+                                <td colspan="7" class="text-center">Loading campaigns...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Date Range Modal -->
+<div class="modal fade" id="dateRangeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Date Range</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="startDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="startDate">
+                </div>
+                <div class="mb-3">
+                    <label for="endDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="endDate">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Quick Select</label>
+                    <div class="btn-group w-100">
+                        <button class="btn btn-outline-secondary" data-range="today">Today</button>
+                        <button class="btn btn-outline-secondary" data-range="week">This Week</button>
+                        <button class="btn btn-outline-secondary" data-range="month">This Month</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyDateRange">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30); // Default to last 30 days
+    let endDate = new Date();
+    
+    // Initialize charts
+    const impressionsCtx = document.getElementById('impressionsChart').getContext('2d');
+    const campaignCtx = document.getElementById('campaignChart').getContext('2d');
+    
+    const impressionsChart = new Chart(impressionsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Impressions',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    const campaignChart = new Chart(campaignCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: [
+                    'rgb(255, 99, 132)',
+                    'rgb(54, 162, 235)',
+                    'rgb(255, 206, 86)',
+                    'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+    
+    // Load analytics data
+    function loadAnalytics() {
+        const params = new URLSearchParams({
+            start_date: startDate.toISOString().split('T')[0],
+            end_date: endDate.toISOString().split('T')[0],
+            campaign: document.getElementById('campaignFilter').value
+        });
+        
+        fetch(`/api/v1/ads/analytics?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update quick stats
+                document.getElementById('totalImpressions').textContent = formatNumber(data.total_impressions);
+                document.getElementById('completionRate').textContent = `${data.completion_rate}%`;
+                document.getElementById('activeCampaigns').textContent = data.active_campaigns;
+                document.getElementById('totalPlaytime').textContent = formatDuration(data.total_playtime);
+                
+                // Update charts
+                impressionsChart.data.labels = data.impressions_over_time.map(d => d.date);
+                impressionsChart.data.datasets[0].data = data.impressions_over_time.map(d => d.count);
+                impressionsChart.update();
+                
+                campaignChart.data.labels = data.campaign_distribution.map(d => d.name);
+                campaignChart.data.datasets[0].data = data.campaign_distribution.map(d => d.count);
+                campaignChart.update();
+                
+                // Update campaign list
+                const tbody = document.getElementById('campaignList');
+                tbody.innerHTML = data.campaigns.map(campaign => `
+                    <tr>
+                        <td>${campaign.name}</td>
+                        <td>${formatNumber(campaign.impressions)}</td>
+                        <td>${campaign.completion_rate}%</td>
+                        <td>${formatDuration(campaign.playtime)}</td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: ${campaign.progress}%" 
+                                     aria-valuenow="${campaign.progress}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    ${campaign.progress}%
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-${getStatusColor(campaign.status)}">
+                                ${campaign.status}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" 
+                                    onclick="location.href='/admin/campaigns/${campaign.id}/analytics'">
+                                <i class="fas fa-chart-line"></i> Details
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Error loading analytics:', error);
+                alert('Failed to load analytics data');
+            });
+    }
+    
+    // Load campaigns for filter
+    function loadCampaigns() {
+        fetch('/api/v1/ads/campaigns')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('campaignFilter');
+                select.innerHTML = `
+                    <option value="">All Campaigns</option>
+                    ${data.items.map(campaign => `
+                        <option value="${campaign.id}">${campaign.name}</option>
+                    `).join('')}
+                `;
+            })
+            .catch(error => console.error('Error loading campaigns:', error));
+    }
+    
+    // Format helpers
+    function formatNumber(value) {
+        return new Intl.NumberFormat().format(value);
+    }
+    
+    function formatDuration(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}h ${minutes}m`;
+    }
+    
+    function getStatusColor(status) {
+        switch (status) {
+            case 'active': return 'success';
+            case 'paused': return 'warning';
+            case 'completed': return 'secondary';
+            default: return 'secondary';
+        }
+    }
+    
+    // Event handlers
+    document.getElementById('refreshBtn').addEventListener('click', loadAnalytics);
+    
+    document.getElementById('exportBtn').addEventListener('click', () => {
+        const params = new URLSearchParams({
+            start_date: startDate.toISOString().split('T')[0],
+            end_date: endDate.toISOString().split('T')[0],
+            campaign: document.getElementById('campaignFilter').value,
+            format: 'csv'
+        });
+        
+        window.location.href = `/api/v1/ads/analytics/export?${params}`;
+    });
+    
+    document.getElementById('campaignFilter').addEventListener('change', loadAnalytics);
+    
+    // Date range handling
+    document.querySelectorAll('[data-range]').forEach(button => {
+        button.addEventListener('click', function() {
+            const range = this.dataset.range;
+            endDate = new Date();
+            
+            switch(range) {
+                case 'today':
+                    startDate = new Date();
+                    break;
+                case 'week':
+                    startDate = new Date();
+                    startDate.setDate(endDate.getDate() - 7);
+                    break;
+                case 'month':
+                    startDate = new Date();
+                    startDate.setMonth(endDate.getMonth() - 1);
+                    break;
+            }
+            
+            document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+            document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+        });
+    });
+    
+    document.getElementById('applyDateRange').addEventListener('click', function() {
+        startDate = new Date(document.getElementById('startDate').value);
+        endDate = new Date(document.getElementById('endDate').value);
+        
+        loadAnalytics();
+        bootstrap.Modal.getInstance(document.getElementById('dateRangeModal')).hide();
+    });
+    
+    // Set initial dates
+    document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+    document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+    
+    // Initial load
+    loadAnalytics();
+    loadCampaigns();
+});
+</script>
+{% endblock %}
