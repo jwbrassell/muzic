@@ -197,17 +197,19 @@ class MediaProcessor:
 
     def _find_media_file(self, file_path: str) -> Optional[str]:
         """Find media file in possible locations."""
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        media_dir = os.path.join(base_dir, 'media')
+        media_dir = get_settings().media.upload_path
+        self.logger.info(f"Looking for file {file_path} in media dir {media_dir}")
         
+        # If file_path is already absolute and exists, return it
+        if os.path.isabs(file_path) and os.path.isfile(file_path):
+            self.logger.info(f"Found absolute path: {file_path}")
+            return file_path
+            
+        # If file_path is relative, try different possible locations
         possible_paths = [
-            # Original paths
             os.path.join(media_dir, file_path),
             os.path.join(media_dir, 'processed', file_path),
-            os.path.join(media_dir, 'processed', os.path.basename(file_path)),
-            
-            # Try absolute path
-            file_path
+            os.path.join(media_dir, 'processed', os.path.basename(file_path))
         ]
         
         # Check if path contains year/month structure
@@ -219,6 +221,8 @@ class MediaProcessor:
             possible_paths.append(
                 os.path.join(media_dir, 'processed', year, month, filename)
             )
+            
+        self.logger.info(f"Trying possible paths: {possible_paths}")
         
         for path in possible_paths:
             if os.path.isfile(path):

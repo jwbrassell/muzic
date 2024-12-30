@@ -150,66 +150,76 @@ document.addEventListener('DOMContentLoaded', function() {
             .map(tag => tag.trim())
             .filter(tag => tag.length > 0);
         
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('files[]', file);
-        });
-        
         try {
-            const response = await fetch('/api/v1/media/', {
-                method: 'POST',
-                body: formData
-            });
+            uploadBtn.disabled = true;
             
-            if (!response.ok) {
-                throw new Error('Upload failed');
-            }
-            
-            const results = await response.json();
-            
-            // Update progress bars based on results
-            results.forEach((result, i) => {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
                 const progressElement = queueList.children[i].querySelector('.progress');
-                progressElement.classList.remove('d-none');
                 const progressBar = progressElement.querySelector('.progress-bar');
+                progressElement.classList.remove('d-none');
                 
-                if (result.error) {
-                    progressBar.classList.add('bg-danger');
-                    console.error(`Error uploading ${result.filename}: ${result.error}`);
-                } else {
-                    progressBar.style.width = '100%';
+                try {
+                    // Log file details
+                    console.log('Uploading file:', {
+                        name: file.name,
+                        size: file.size,
+                        type: file.type
+                    });
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const response = await fetch('/api/v1/media/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to upload file');
+                    }
+
+                    const result = await response.json();
                     progressBar.classList.add('bg-success');
+                    progressBar.style.width = '100%';
                     
                     // Add tags if upload was successful
-                    if (tags.length > 0 && result.id) {
-                        fetch(`/api/v1/media/${result.id}/tags`, {
+                    if (tags.length > 0 && result.media_id) {
+                        await fetch(`/api/v1/media/${result.media_id}/tags`, {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json'
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
                             },
                             body: JSON.stringify({ tags })
-                        }).catch(error => {
-                            console.error(`Error adding tags to ${result.filename}:`, error);
                         });
                     }
+                } catch (error) {
+                    console.error(`Error uploading ${file.name}:`, error);
+                    progressBar.classList.add('bg-danger');
+                    progressBar.style.width = '100%';
                 }
-            });
-            
+            }
         } catch (error) {
             console.error('Upload error:', error);
-            // Show error for all files
             Array.from(queueList.children).forEach(item => {
                 const progressElement = item.querySelector('.progress');
                 progressElement.classList.remove('d-none');
                 const progressBar = progressElement.querySelector('.progress-bar');
                 progressBar.classList.add('bg-danger');
             });
+        } finally {
+            // Clear queue after uploads
+            files = [];
+            updateQueue();
+            tagsInput.value = '';
         }
-        
-        // Clear queue after uploads
-        files = [];
-        updateQueue();
-        tagsInput.value = '';
     });
     
     function formatSize(bytes) {

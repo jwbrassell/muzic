@@ -6,9 +6,14 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">System Status</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBtn">
-            <i class="fas fa-sync-alt"></i> Refresh
-        </button>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBtn">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="optimizeBtn">
+                <i class="fas fa-magic"></i> Optimize
+            </button>
+        </div>
     </div>
 </div>
 
@@ -96,26 +101,88 @@
     </div>
 </div>
 
-<!-- System Services -->
+<!-- Cache Stats -->
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">System Services</h5>
+                <h5 class="card-title">Cache Performance</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="metric-card">
+                            <h6>Cache Hit Rate</h6>
+                            <h3 id="cacheHitRate">-</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-card">
+                            <h6>Error Count (24h)</h6>
+                            <h3 id="errorCount">-</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-card">
+                            <h6>Redis Status</h6>
+                            <h3 id="redisStatus">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Database Stats -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0">Database Performance</h5>
+                    <button class="btn btn-sm btn-outline-secondary" id="analyzeBtn">
+                        <i class="fas fa-search"></i> Analyze
+                    </button>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Service</th>
-                                <th>Status</th>
-                                <th>Uptime</th>
-                                <th>Last Check</th>
-                                <th>Actions</th>
+                                <th>Table</th>
+                                <th>Row Count</th>
+                                <th>Size</th>
+                                <th>Indexes</th>
                             </tr>
                         </thead>
-                        <tbody id="servicesList">
+                        <tbody id="dbStatsList">
                             <tr>
-                                <td colspan="5" class="text-center">Loading services...</td>
+                                <td colspan="4" class="text-center">Loading statistics...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slow Queries -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Slow Queries</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Query</th>
+                                <th>Average Duration</th>
+                                <th>Execution Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slowQueriesList">
+                            <tr>
+                                <td colspan="3" class="text-center">Loading queries...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -158,6 +225,39 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // WebSocket connection
+    const ws = new WebSocket(`ws://${window.location.host}/ws/monitoring`);
+    
+    ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        switch(data.type) {
+            case 'system_metrics':
+                updateMetrics(data.metrics);
+                break;
+            case 'health_status':
+                updateHealthStatus(data.status);
+                break;
+            case 'error':
+                addErrorEvent(data);
+                break;
+            case 'cache_stats':
+                updateCacheStats(data);
+                break;
+        }
+    };
+    
+    ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+    
+    ws.onclose = function() {
+        console.log('WebSocket connection closed');
+        // Attempt to reconnect after 5 seconds
+        setTimeout(() => {
+            window.location.reload();
+        }, 5000);
+    };
+    
     // Initialize charts
     const resourcesCtx = document.getElementById('resourcesChart').getContext('2d');
     const networkCtx = document.getElementById('networkChart').getContext('2d');
@@ -223,90 +323,99 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Load system status
-    function loadSystemStatus() {
-        fetch('/api/v1/system/status')
-            .then(response => response.json())
-            .then(data => {
-                // Update quick stats
-                document.getElementById('systemUptime').textContent = formatUptime(data.uptime);
-                document.getElementById('cpuUsage').textContent = `${data.cpu_usage}%`;
-                document.getElementById('memoryUsage').textContent = `${data.memory_usage}%`;
-                document.getElementById('diskUsage').textContent = `${data.disk_usage}%`;
-                
-                // Update progress bars
-                document.getElementById('cpuProgressBar').style.width = `${data.cpu_usage}%`;
-                document.getElementById('memoryProgressBar').style.width = `${data.memory_usage}%`;
-                document.getElementById('diskProgressBar').style.width = `${data.disk_usage}%`;
-                
-                // Update charts
-                const timestamps = data.history.map(h => h.timestamp);
-                resourcesChart.data.labels = timestamps;
-                resourcesChart.data.datasets[0].data = data.history.map(h => h.cpu_usage);
-                resourcesChart.data.datasets[1].data = data.history.map(h => h.memory_usage);
-                resourcesChart.update();
-                
-                networkChart.data.labels = timestamps;
-                networkChart.data.datasets[0].data = data.history.map(h => h.network_in);
-                networkChart.data.datasets[1].data = data.history.map(h => h.network_out);
-                networkChart.update();
-                
-                // Update services list
-                const servicesList = document.getElementById('servicesList');
-                servicesList.innerHTML = data.services.map(service => `
-                    <tr>
-                        <td>
-                            <i class="fas fa-${service.icon}"></i>
-                            ${service.name}
-                        </td>
-                        <td>
-                            <span class="badge bg-${getStatusColor(service.status)}">
-                                ${service.status}
-                            </span>
-                        </td>
-                        <td>${formatUptime(service.uptime)}</td>
-                        <td>${formatDate(service.last_check)}</td>
-                        <td>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-secondary" 
-                                        onclick="restartService('${service.id}')">
-                                    <i class="fas fa-sync-alt"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-${service.status === 'running' ? 'warning' : 'success'}" 
-                                        onclick="toggleService('${service.id}')">
-                                    <i class="fas fa-${service.status === 'running' ? 'stop' : 'play'}"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-                
-                // Update events list
-                const eventsList = document.getElementById('eventsList');
-                eventsList.innerHTML = data.events.map(event => `
-                    <tr>
-                        <td>${formatDate(event.timestamp)}</td>
-                        <td>
-                            <span class="badge bg-${getEventTypeColor(event.type)}">
-                                ${event.type}
-                            </span>
-                        </td>
-                        <td>${event.component}</td>
-                        <td>${event.message}</td>
-                        <td>
-                            <span class="badge bg-${getStatusColor(event.status)}">
-                                ${event.status}
-                            </span>
-                        </td>
-                    </tr>
-                `).join('');
-            })
-            .catch(error => {
-                console.error('Error loading system status:', error);
-                alert('Failed to load system status');
-            });
+    // Update functions for WebSocket events
+    function updateMetrics(metrics) {
+        // Update quick stats
+        document.getElementById('systemUptime').textContent = formatUptime(process.uptime());
+        document.getElementById('cpuUsage').textContent = `${metrics.cpu.percent}%`;
+        document.getElementById('memoryUsage').textContent = `${metrics.memory.percent}%`;
+        document.getElementById('diskUsage').textContent = `${metrics.disk.percent}%`;
+        
+        // Update progress bars
+        document.getElementById('cpuProgressBar').style.width = `${metrics.cpu.percent}%`;
+        document.getElementById('memoryProgressBar').style.width = `${metrics.memory.percent}%`;
+        document.getElementById('diskProgressBar').style.width = `${metrics.disk.percent}%`;
+        
+        // Update resource charts
+        const timestamp = new Date().toLocaleTimeString();
+        
+        // Remove oldest data point and add new one
+        resourcesChart.data.labels.shift();
+        resourcesChart.data.labels.push(timestamp);
+        
+        resourcesChart.data.datasets[0].data.shift();
+        resourcesChart.data.datasets[0].data.push(metrics.cpu.percent);
+        
+        resourcesChart.data.datasets[1].data.shift();
+        resourcesChart.data.datasets[1].data.push(metrics.memory.percent);
+        
+        resourcesChart.update();
     }
     
+    function updateHealthStatus(status) {
+        document.getElementById('redisStatus').textContent = status.components.redis.status;
+        
+        // Update events list if status changed
+        if (!status.healthy) {
+            addErrorEvent({
+                timestamp: status.timestamp,
+                type: 'warning',
+                details: 'System health degraded',
+                component: 'System',
+                status: 'warning'
+            });
+        }
+    }
+    
+    function updateCacheStats(data) {
+        document.getElementById('cacheHitRate').textContent = `${data.hit_rate.toFixed(1)}%`;
+        document.getElementById('errorCount').textContent = data.error_count;
+    }
+    
+    function addErrorEvent(error) {
+        const eventsList = document.getElementById('eventsList');
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td>${formatDate(error.timestamp)}</td>
+            <td>
+                <span class="badge bg-${getEventTypeColor(error.type)}">
+                    ${error.type}
+                </span>
+            </td>
+            <td>${error.component || 'System'}</td>
+            <td>${error.details}</td>
+            <td>
+                <span class="badge bg-${getStatusColor(error.status || error.type)}">
+                    ${error.status || error.type}
+                </span>
+            </td>
+        `;
+        
+        // Add new event at the top
+        if (eventsList.firstChild) {
+            eventsList.insertBefore(newRow, eventsList.firstChild);
+        } else {
+            eventsList.appendChild(newRow);
+        }
+        
+        // Limit to last 10 events
+        while (eventsList.children.length > 10) {
+            eventsList.removeChild(eventsList.lastChild);
+        }
+    }
+
+    // Format helpers
+    function formatBytes(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = bytes;
+        let unit = 0;
+        while (size >= 1024 && unit < units.length - 1) {
+            size /= 1024;
+            unit++;
+        }
+        return `${size.toFixed(1)} ${units[unit]}`;
+    }
+
     // Format helpers
     function formatUptime(seconds) {
         const days = Math.floor(seconds / 86400);
@@ -347,50 +456,65 @@ document.addEventListener('DOMContentLoaded', function() {
             default: return 'secondary';
         }
     }
+
+    // Event handlers
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        window.location.reload();
+    });
     
-    // Service actions
-    window.restartService = async function(serviceId) {
-        if (!confirm('Are you sure you want to restart this service?')) return;
+    document.getElementById('analyzeBtn').addEventListener('click', () => {
+        fetch('/api/system/analyze')
+            .then(response => response.json())
+            .then(data => {
+                // Update database stats
+                const dbStatsList = document.getElementById('dbStatsList');
+                dbStatsList.innerHTML = Object.entries(data.statistics).map(([table, stats]) => `
+                    <tr>
+                        <td>${table}</td>
+                        <td>${stats.row_count}</td>
+                        <td>${formatBytes(stats.size_bytes)}</td>
+                        <td>${stats.indexes}</td>
+                    </tr>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Error analyzing database:', error);
+                alert('Failed to analyze database');
+            });
+    });
+    document.getElementById('optimizeBtn').addEventListener('click', async function() {
+        if (!confirm('Run database optimization? This may take a few moments.')) return;
         
         try {
-            const response = await fetch(`/api/v1/system/services/${serviceId}/restart`, {
+            const response = await fetch('/api/system/optimize', {
                 method: 'POST'
             });
             
-            if (!response.ok) throw new Error('Failed to restart service');
+            if (!response.ok) throw new Error('Optimization failed');
             
+            const result = await response.json();
+            alert('Optimization complete');
             loadSystemStatus();
             
         } catch (error) {
-            console.error('Error restarting service:', error);
-            alert('Failed to restart service');
+            console.error('Error during optimization:', error);
+            alert('Optimization failed');
         }
-    };
+    });
     
-    window.toggleService = async function(serviceId) {
-        try {
-            const response = await fetch(`/api/v1/system/services/${serviceId}/toggle`, {
-                method: 'POST'
-            });
-            
-            if (!response.ok) throw new Error('Failed to toggle service');
-            
-            loadSystemStatus();
-            
-        } catch (error) {
-            console.error('Error toggling service:', error);
-            alert('Failed to toggle service');
-        }
-    };
+    // Initialize charts with empty data
+    const timestamps = Array(10).fill(0).map(() => '');
+    const emptyData = Array(10).fill(0);
     
-    // Auto-refresh
-    let refreshInterval = setInterval(loadSystemStatus, 30000); // Refresh every 30 seconds
+    resourcesChart.data.labels = timestamps;
+    resourcesChart.data.datasets[0].data = emptyData;
+    resourcesChart.data.datasets[1].data = emptyData;
+    resourcesChart.update();
     
-    // Event handlers
-    document.getElementById('refreshBtn').addEventListener('click', loadSystemStatus);
-    
-    // Initial load
-    loadSystemStatus();
+    networkChart.data.labels = timestamps;
+    networkChart.data.datasets[0].data = emptyData;
+    networkChart.data.datasets[1].data = emptyData;
+    networkChart.update();
 });
 </script>
 {% endblock %}

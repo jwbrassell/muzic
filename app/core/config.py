@@ -13,6 +13,7 @@ class MediaConfig:
     upload_path: str
     allowed_extensions: set[str]
     max_file_size: int  # in bytes
+    chunk_size: int = 1024 * 1024  # 1MB default chunk size
 
 @dataclass
 class AdConfig:

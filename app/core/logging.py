@@ -120,6 +120,7 @@ db_logger = LoggerFactory.get_logger('db')
 media_logger = LoggerFactory.get_logger('media')
 ad_logger = LoggerFactory.get_logger('ads')
 api_logger = LoggerFactory.get_logger('api')
+system_logger = LoggerFactory.get_logger('system')
 
 def log_function_call(logger: logging.Logger):
     """Decorator to log function calls with parameters and return values."""

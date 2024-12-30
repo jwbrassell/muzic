@@ -25,22 +25,79 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-body">
-                <!-- Search and Filter -->
+                <!-- Advanced Search and Filters -->
                 <div class="row mb-3">
-                    <div class="col-md-8">
+                    <div class="col-md-12 mb-3">
                         <div class="input-group">
-                            <input type="text" class="form-control" id="searchInput" placeholder="Search media...">
-                            <button class="btn btn-outline-secondary" type="button">
+                            <input type="text" class="form-control" id="searchInput" placeholder="Search by title, artist, or tags...">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-filter"></i> Filters
+                            </button>
+                            <div class="dropdown-menu p-3" style="width: 300px;">
+                                <div class="mb-3">
+                                    <label class="form-label">Type</label>
+                                    <select class="form-select" id="filterType">
+                                        <option value="">All Types</option>
+                                        <option value="audio">Audio</option>
+                                        <option value="video">Video</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Duration</label>
+                                    <select class="form-select" id="filterDuration">
+                                        <option value="">Any Duration</option>
+                                        <option value="short">Short (< 3 min)</option>
+                                        <option value="medium">Medium (3-10 min)</option>
+                                        <option value="long">Long (> 10 min)</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Added Date</label>
+                                    <select class="form-select" id="filterDate">
+                                        <option value="">Any Time</option>
+                                        <option value="today">Today</option>
+                                        <option value="week">This Week</option>
+                                        <option value="month">This Month</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Tags</label>
+                                    <input type="text" class="form-control" id="filterTags" placeholder="tag1, tag2">
+                                </div>
+                                <button class="btn btn-primary w-100" onclick="MediaLibrary.applyFilters()">
+                                    Apply Filters
+                                </button>
+                            </div>
+                            <button class="btn btn-outline-secondary" type="button" onclick="MediaLibrary.search()">
                                 <i class="fas fa-search"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <select class="form-select" id="filterType">
-                            <option value="">All Types</option>
-                            <option value="audio">Audio</option>
-                            <option value="video">Video</option>
-                        </select>
+                </div>
+
+                <!-- Batch Operations -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-secondary" onclick="MediaLibrary.selectAll()">
+                                <i class="fas fa-check-square"></i> Select All
+                            </button>
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                Batch Actions
+                            </button>
+                            <div class="dropdown-menu">
+                                <a class="dropdown-item" href="#" onclick="MediaLibrary.batchTag()">
+                                    <i class="fas fa-tags"></i> Add Tags
+                                </a>
+                                <a class="dropdown-item" href="#" onclick="MediaLibrary.batchMove()">
+                                    <i class="fas fa-folder-open"></i> Move to Folder
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item text-danger" href="#" onclick="MediaLibrary.batchDelete()">
+                                    <i class="fas fa-trash"></i> Delete Selected
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -49,6 +106,9 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
+                                <th>
+                                    <input type="checkbox" class="form-check-input" id="selectAllCheckbox">
+                                </th>
                                 <th>Title</th>
                                 <th>Type</th>
                                 <th>Duration</th>
@@ -195,6 +255,139 @@ var MediaLibrary = {
         ).join(' ');
     },
 
+    // Batch operations
+    selectAll: function() {
+        const checkboxes = document.querySelectorAll('.media-checkbox');
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+    },
+
+    getSelectedIds: function() {
+        return Array.from(document.querySelectorAll('.media-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+    },
+
+    batchTag: function() {
+        const selectedIds = this.getSelectedIds();
+        if (selectedIds.length === 0) {
+            alert('Please select media items first');
+            return;
+        }
+
+        const tags = prompt('Enter tags to add (comma separated):');
+        if (!tags) return;
+
+        const tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+        if (tagList.length === 0) return;
+
+        Promise.all(selectedIds.map(id =>
+            fetch(`/api/v1/media/${id}/tags`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags: tagList })
+            }).then(r => r.json())
+        ))
+        .then(() => {
+            this.loadMediaLibrary(1, this.currentParams);
+        })
+        .catch(error => {
+            console.error('Error adding tags:', error);
+            alert('Failed to add tags to some items');
+        });
+    },
+
+    batchMove: function() {
+        const selectedIds = this.getSelectedIds();
+        if (selectedIds.length === 0) {
+            alert('Please select media items first');
+            return;
+        }
+
+        const folder = prompt('Enter destination folder:');
+        if (!folder) return;
+
+        Promise.all(selectedIds.map(id =>
+            fetch(`/api/v1/media/${id}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder: folder })
+            }).then(r => r.json())
+        ))
+        .then(() => {
+            this.loadMediaLibrary(1, this.currentParams);
+        })
+        .catch(error => {
+            console.error('Error moving files:', error);
+            alert('Failed to move some items');
+        });
+    },
+
+    batchDelete: function() {
+        const selectedIds = this.getSelectedIds();
+        if (selectedIds.length === 0) {
+            alert('Please select media items first');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete ${selectedIds.length} items? This action cannot be undone.`)) {
+            return;
+        }
+
+        Promise.all(selectedIds.map(id =>
+            fetch(`/api/v1/media/${id}`, { method: 'DELETE' })
+                .then(r => r.json())
+        ))
+        .then(() => {
+            this.loadMediaLibrary(1, this.currentParams);
+        })
+        .catch(error => {
+            console.error('Error deleting files:', error);
+            alert('Failed to delete some items');
+        });
+    },
+
+    downloadMedia: function(id) {
+        window.location.href = `/api/v1/media/${id}/download`;
+    },
+
+    moveMedia: function(id) {
+        const folder = prompt('Enter destination folder:');
+        if (!folder) return;
+
+        fetch(`/api/v1/media/${id}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: folder })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.error) throw new Error(result.error);
+            this.loadMediaLibrary(1, this.currentParams);
+        })
+        .catch(error => {
+            console.error('Error moving file:', error);
+            alert('Failed to move file');
+        });
+    },
+
+    applyFilters: function() {
+        this.currentParams = {
+            q: document.getElementById('searchInput').value.trim(),
+            type: document.getElementById('filterType').value,
+            duration: document.getElementById('filterDuration').value,
+            date: document.getElementById('filterDate').value,
+            tags: document.getElementById('filterTags').value.trim()
+        };
+        this.loadMediaLibrary(1);
+    },
+
+    search: function() {
+        this.currentParams.q = document.getElementById('searchInput').value.trim();
+        this.loadMediaLibrary(1);
+    },
+
     // Core functionality
     loadMediaLibrary: function(page = 1, params = {}) {
         const mediaList = document.getElementById('mediaList');
@@ -224,7 +417,15 @@ var MediaLibrary = {
                 
                 tbody.innerHTML = data.items.map(item => `
                     <tr>
-                        <td>${item.title || 'Untitled'}</td>
+                        <td>
+                            <input type="checkbox" class="form-check-input media-checkbox" value="${item.id}">
+                        </td>
+                        <td>
+                            <div class="media-title">
+                                <strong>${item.title || 'Untitled'}</strong>
+                                ${item.artist ? `<br><small class="text-muted">${item.artist}</small>` : ''}
+                            </div>
+                        </td>
                         <td>
                             <span class="badge bg-${item.type === 'audio' ? 'primary' : 'info'}">
                                 ${item.type || 'unknown'}
@@ -232,19 +433,35 @@ var MediaLibrary = {
                         </td>
                         <td>${this.formatDuration(item.duration)}</td>
                         <td>${this.formatSize(item.size)}</td>
-                        <td>${this.formatDate(item.created_at)}</td>
+                        <td>
+                            <div title="${this.formatDate(item.created_at, true)}">
+                                ${this.formatDate(item.created_at)}
+                            </div>
+                        </td>
                         <td>${this.formatTags(item.tags)}</td>
                         <td>
                             <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="MediaLibrary.previewMedia(${item.id})">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="MediaLibrary.previewMedia(${item.id})" title="Preview">
                                     <i class="fas fa-play"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="MediaLibrary.editMedia(${item.id})">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="MediaLibrary.editMedia(${item.id})" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="MediaLibrary.deleteMedia(${item.id})">
-                                    <i class="fas fa-trash"></i>
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
                                 </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="#" onclick="MediaLibrary.downloadMedia(${item.id})">
+                                        <i class="fas fa-download"></i> Download
+                                    </a>
+                                    <a class="dropdown-item" href="#" onclick="MediaLibrary.moveMedia(${item.id})">
+                                        <i class="fas fa-folder-open"></i> Move
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item text-danger" href="#" onclick="MediaLibrary.deleteMedia(${item.id})">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </a>
+                                </div>
                             </div>
                         </td>
                     </tr>
@@ -495,6 +712,14 @@ var MediaLibrary = {
 
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', function() {
+    // Set up select all checkbox
+    document.getElementById('selectAllCheckbox').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.media-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+    });
+
     document.getElementById('refreshBtn').addEventListener('click', () => {
         document.getElementById('searchInput').value = '';
         document.getElementById('filterType').value = '';

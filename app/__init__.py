@@ -4,12 +4,14 @@ import os
 
 from .core.config import get_settings
 from .core.logging import app_logger, log_function_call
-from .core.database import Database
+from .core.database import init_db, init_app as init_db_app
 
-# Import blueprints
+# Import blueprints and websocket
 from .api.media import media_api
 from .api.playlist import playlist_api
 from .api.ads import ads_api
+from .api.system import system_api
+from .api.websocket import ws_api, sock
 from .admin import admin
 
 @log_function_call(app_logger)
@@ -19,8 +21,16 @@ def create_app(test_config=None):
                 template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), '../templates')),
                 static_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), '../static')))
     
-    # Enable CORS
-    CORS(app)
+    # Enable CORS with proper configuration
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",
+            "allow_headers": ["Accept", "Content-Type", "X-Requested-With"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "supports_credentials": True,
+            "max_age": 3600
+        }
+    })
     
     # Load configuration
     if test_config is None:
@@ -30,7 +40,9 @@ def create_app(test_config=None):
             SECRET_KEY=settings.app.secret_key,
             DATABASE=settings.database.path,
             UPLOAD_FOLDER=settings.media.upload_path,
-            MAX_CONTENT_LENGTH=settings.media.max_file_size
+            MAX_CONTENT_LENGTH=settings.media.max_file_size,
+            UPLOAD_EXTENSIONS=['.mp3', '.wav', '.mp4', '.webm'],
+            UPLOAD_PATH=settings.media.upload_path
         )
     else:
         # Load the test config if passed in
@@ -43,15 +55,20 @@ def create_app(test_config=None):
         pass
 
     # Initialize database
-    db = Database(app.config['DATABASE'])
+    init_db_app(app)
     
     # Ensure required directories exist
     settings.ensure_directories()
+    
+    # Initialize WebSocket
+    sock.init_app(app)
     
     # Register API blueprints with distinct prefixes
     app.register_blueprint(media_api, url_prefix='/api/v1/media')
     app.register_blueprint(playlist_api, url_prefix='/api/v1/playlists')
     app.register_blueprint(ads_api, url_prefix='/api/v1/ads')
+    app.register_blueprint(system_api, url_prefix='/api/v1/system')
+    app.register_blueprint(ws_api)
     
     # Register admin blueprint
     app.register_blueprint(admin)
@@ -105,7 +122,7 @@ def create_app(test_config=None):
     # Initialize database schema
     with app.app_context():
         try:
-            db.initialize_schema(settings.database.schema_path)
+            init_db()
             app_logger.info("Database schema initialized successfully")
         except Exception as e:
             app_logger.error(f"Error initializing database schema: {str(e)}")

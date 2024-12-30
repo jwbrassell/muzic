@@ -1,151 +1,186 @@
 import sqlite3
-from contextlib import contextmanager
-from typing import Generator, Any, Optional
 import os
-from datetime import datetime
-from app.core.cache import cached, invalidate_cache, CacheError
+import json
+from flask import current_app, g
 from app.core.config import get_settings
+from app.core.files import clean_filepath
 
-class Database:
-    def __init__(self, db_path: str):
-        """Initialize database connection."""
-        self.db_path = db_path
-        self._ensure_db_directory()
-
-    def _ensure_db_directory(self) -> None:
-        """Ensure the database directory exists."""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-
-    @contextmanager
-    def get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Get a database connection with automatic closing."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-
-    @contextmanager
-    def get_cursor(self) -> Generator[sqlite3.Cursor, None, None]:
-        """Get a database cursor with automatic closing."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            try:
-                yield cursor
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-
-    def execute(self, query: str, params: tuple = ()) -> Any:
-        """Execute a query and return the cursor."""
-        with self.get_cursor() as cursor:
-            return cursor.execute(query, params)
-
-    def execute_many(self, query: str, params_list: list[tuple]) -> None:
-        """Execute many queries at once."""
-        with self.get_cursor() as cursor:
-            cursor.executemany(query, params_list)
-
-    def _generate_cache_key(self, query: str, params: tuple = ()) -> str:
-        """Generate a cache key from a query and its parameters."""
-        param_str = ':'.join(str(p) for p in params)
-        return f"db:{hash(query)}:{hash(param_str)}"
-
-    @cached(key_prefix='db_query', timeout=get_settings().cache.default_timeout)
-    def fetch_one(self, query: str, params: tuple = ()) -> Optional[dict]:
-        """Fetch a single row with caching."""
-        with self.get_cursor() as cursor:
-            row = cursor.execute(query, params).fetchone()
-            return dict_from_row(row) if row else None
-
-    @cached(key_prefix='db_query', timeout=get_settings().cache.default_timeout)
-    def fetch_all(self, query: str, params: tuple = ()) -> list[dict]:
-        """Fetch all rows with caching."""
-        with self.get_cursor() as cursor:
-            rows = cursor.execute(query, params).fetchall()
-            return [dict_from_row(row) for row in rows]
-
-    @invalidate_cache('db_query:*')
-    def insert(self, table: str, data: dict) -> int:
-        """Insert a row into a table and return the id."""
-        columns = ', '.join(data.keys())
-        placeholders = ', '.join('?' * len(data))
-        query = f'INSERT INTO {table} ({columns}) VALUES ({placeholders})'
-        
-        with self.get_cursor() as cursor:
-            cursor.execute(query, tuple(data.values()))
-            return cursor.lastrowid
-
-    @invalidate_cache('db_query:*')
-    def update(self, table: str, data: dict, where: dict) -> None:
-        """Update rows in a table."""
-        set_clause = ', '.join(f'{k} = ?' for k in data.keys())
-        where_clause = ' AND '.join(f'{k} = ?' for k in where.keys())
-        query = f'UPDATE {table} SET {set_clause} WHERE {where_clause}'
-        
-        with self.get_cursor() as cursor:
-            cursor.execute(query, tuple(data.values()) + tuple(where.values()))
-
-    @invalidate_cache('db_query:*')
-    def delete(self, table: str, where: dict) -> None:
-        """Delete rows from a table."""
-        where_clause = ' AND '.join(f'{k} = ?' for k in where.keys())
-        query = f'DELETE FROM {table} WHERE {where_clause}'
-        
-        with self.get_cursor() as cursor:
-            cursor.execute(query, tuple(where.values()))
-
-    def table_exists(self, table_name: str) -> bool:
-        """Check if a table exists."""
-        query = """
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name=?
-        """
-        return bool(self.fetch_one(query, (table_name,)))
-
-    def initialize_schema(self, schema_path: str) -> None:
-        """Initialize the database schema from a SQL file."""
-        with open(schema_path, 'r') as f:
-            schema = f.read()
-            
-        with self.get_connection() as conn:
-            conn.executescript(schema)
-
-class DatabaseSession:
-    """Context manager for database operations."""
-    def __init__(self, db: Database):
-        self.db = db
-        self.conn = None
-        self.cursor = None
-
-    def __enter__(self):
-        self.conn = sqlite3.connect(self.db.db_path)
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is None:
-            self.conn.commit()
-        else:
-            self.conn.rollback()
-        
-        if self.cursor:
-            self.cursor.close()
-        if self.conn:
-            self.conn.close()
-
-# Utility functions for common database operations
-def dict_from_row(row: sqlite3.Row) -> dict:
+def dict_from_row(row):
     """Convert a sqlite3.Row to a dictionary."""
+    if row is None:
+        return None
     return dict(zip(row.keys(), row))
 
-def timestamp_to_datetime(timestamp: str) -> datetime:
-    """Convert a SQLite timestamp to a datetime object."""
-    return datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+class Database:
+    """Database wrapper class for SQLite operations."""
+    
+    def __init__(self, db_path):
+        """Initialize database connection."""
+        self.db_path = db_path
+        self._connection = None
 
-def datetime_to_timestamp(dt: datetime) -> str:
-    """Convert a datetime object to a SQLite timestamp string."""
-    return dt.strftime('%Y-%m-%d %H:%M:%S')
+    @property
+    def connection(self):
+        """Get database connection, creating it if needed."""
+        if self._connection is None:
+            self._connection = sqlite3.connect(self.db_path)
+            self._connection.row_factory = sqlite3.Row
+        return self._connection
+
+    def execute(self, query, params=()):
+        """Execute a query and return the cursor."""
+        return self.connection.execute(query, params)
+
+    def fetch_one(self, query, params=()):
+        """Execute a query and fetch one result."""
+        cursor = self.execute(query, params)
+        return cursor.fetchone()
+
+    def fetch_all(self, query, params=()):
+        """Execute a query and fetch all results."""
+        cursor = self.execute(query, params)
+        return cursor.fetchall()
+
+    def insert(self, table, data):
+        """Insert a record into a table."""
+        columns = ', '.join(data.keys())
+        placeholders = ', '.join(['?' for _ in data])
+        query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+        cursor = self.execute(query, list(data.values()))
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def update(self, table, values, where):
+        """Update records in a table."""
+        set_clause = ', '.join([f"{k} = ?" for k in values.keys()])
+        where_clause = ' AND '.join([f"{k} = ?" for k in where.keys()])
+        query = f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
+        params = list(values.values()) + list(where.values())
+        cursor = self.execute(query, params)
+        self.connection.commit()
+        return cursor.rowcount > 0
+
+    def delete(self, table, where):
+        """Delete records from a table."""
+        where_clause = ' AND '.join([f"{k} = ?" for k in where.keys()])
+        query = f"DELETE FROM {table} WHERE {where_clause}"
+        cursor = self.execute(query, list(where.values()))
+        self.connection.commit()
+        return cursor.rowcount > 0
+
+    def commit(self):
+        """Commit the current transaction."""
+        if self._connection:
+            self._connection.commit()
+
+    def close(self):
+        """Close the database connection."""
+        if self._connection:
+            self._connection.close()
+            self._connection = None
+
+def get_db():
+    """Get database connection."""
+    if 'db' not in g:
+        try:
+            settings = get_settings()
+            # Create instance directory if it doesn't exist
+            os.makedirs(os.path.dirname(settings.DATABASE_PATH), exist_ok=True)
+            
+            # Check if database exists, if not initialize it
+            db_exists = os.path.exists(settings.DATABASE_PATH)
+            
+            print(f"Connecting to database at: {settings.DATABASE_PATH}")
+            g.db = sqlite3.connect(settings.DATABASE_PATH)
+            g.db.row_factory = sqlite3.Row
+            
+            # Initialize database if it doesn't exist
+            if not db_exists:
+                print("Database doesn't exist, initializing...")
+                init_db()
+                print("Database initialized successfully")
+            
+            # Test the connection
+            cursor = g.db.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = cursor.fetchall()
+            print("Available tables:", [table[0] for table in tables])
+            
+        except Exception as e:
+            print(f"Error connecting to database: {str(e)}")
+            raise
+            
+    return g.db
+
+def close_db(e=None):
+    """Close database connection."""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    """Initialize the database with required tables."""
+    db = get_db()
+    schema_path = os.path.join(current_app.root_path, '..', 'schema.sql')
+    with open(schema_path, mode='r') as f:
+        db.cursor().executescript(f.read())
+    
+    # Add checksum column if it doesn't exist
+    try:
+        db.execute('ALTER TABLE media ADD COLUMN checksum TEXT')
+        print("Added checksum column to media table")
+    except sqlite3.OperationalError:
+        print("Checksum column already exists")
+    
+    db.commit()
+
+def file_exists_by_checksum(checksum, clean_path):
+    """Check if a file with the same checksum or cleaned path exists in the database."""
+    db = get_db()
+    cursor = db.execute('SELECT id FROM media WHERE checksum = ? OR file_path = ?', 
+                       [checksum, clean_path])
+    return cursor.fetchone() is not None
+
+def get_playlist_state():
+    """Get current playlist state from database."""
+    db = get_db()
+    state = db.execute('SELECT * FROM playlist_state ORDER BY id DESC LIMIT 1').fetchone()
+    if state:
+        return {
+            'current_playlist': state['playlist_id'],
+            'current_position': state['current_position'],
+            'last_ad_position': state['last_ad_position'],
+            'is_repeat': bool(state['is_repeat']),
+            'is_shuffle': bool(state['is_shuffle']),
+            'shuffle_queue': json.loads(state['shuffle_queue']) if state['shuffle_queue'] else []
+        }
+    return {
+        'current_playlist': None,
+        'current_position': 0,
+        'last_ad_position': 0,
+        'is_repeat': True,
+        'is_shuffle': False,
+        'shuffle_queue': []
+    }
+
+def save_playlist_state(state):
+    """Save current playlist state to database."""
+    db = get_db()
+    db.execute('DELETE FROM playlist_state')  # Clear old state
+    db.execute('''
+        INSERT INTO playlist_state 
+        (playlist_id, current_position, last_ad_position, is_repeat, is_shuffle, shuffle_queue)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', [
+        state['current_playlist'],
+        state['current_position'],
+        state['last_ad_position'],
+        state['is_repeat'],
+        state['is_shuffle'],
+        json.dumps(state['shuffle_queue'])
+    ])
+    db.commit()
+
+def init_app(app):
+    """Initialize database hooks with the Flask app."""
+    app.teardown_appcontext(close_db)

@@ -1,4 +1,5 @@
 from flask import render_template, redirect, url_for, request, flash, jsonify, current_app, send_from_directory
+from flask_sock import Sock
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
@@ -6,12 +7,16 @@ from datetime import datetime
 from . import admin
 from ..core.database import Database
 from ..core.config import get_settings
+from ..core.monitoring import get_monitor
+from ..core.optimization import get_optimizer
 from ..ads.campaign import CampaignManager
 from ..ads.analytics import AdAnalytics
 
 # Initialize components
 settings = get_settings()
 db = Database(settings.database.path)
+monitor = get_monitor()
+optimizer = get_optimizer()
 campaign_manager = CampaignManager(db)
 ad_analytics = AdAnalytics(db)
 
@@ -69,6 +74,45 @@ def ad_analytics_dashboard():
 def system_status():
     """System status dashboard."""
     return render_template('admin/system/status.html')
+
+@admin.route('/api/system/analyze')
+def analyze_system():
+    """Analyze system performance."""
+    try:
+        # Get database statistics
+        db_stats = optimizer.analyze_table_statistics()
+        
+        # Get query performance
+        slow_queries = optimizer.analyze_query_performance()
+        
+        return jsonify({
+            'statistics': db_stats,
+            'slow_queries': slow_queries
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error analyzing system: {str(e)}")
+        return jsonify({'error': 'System analysis failed'}), 500
+
+
+@admin.route('/api/system/optimize', methods=['POST'])
+def optimize_system():
+    """Run system optimization."""
+    try:
+        optimization_result = optimizer.optimize_database()
+        return jsonify(optimization_result)
+    except Exception as e:
+        current_app.logger.error(f"Error during optimization: {str(e)}")
+        return jsonify({'error': 'Optimization failed'}), 500
+
+@admin.route('/api/system/slow-queries')
+def slow_queries():
+    """Get slow query analysis."""
+    try:
+        queries = optimizer.analyze_query_performance()
+        return jsonify(queries)
+    except Exception as e:
+        current_app.logger.error(f"Error analyzing queries: {str(e)}")
+        return jsonify({'error': 'Query analysis failed'}), 500
 
 @admin.route('/system/logs')
 def system_logs():

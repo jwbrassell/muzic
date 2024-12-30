@@ -49,30 +49,82 @@ git clone https://github.com/yourusername/music_streaming_app.git
 cd music_streaming_app
 ```
 
-2. Run the setup script with administrator privileges:
-
-On macOS/Linux:
+2. Create and activate virtual environment:
 ```bash
-sudo python setup.py
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-On Windows (Run PowerShell as Administrator):
-```powershell
-python setup.py
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
 ```
 
-The setup script automatically:
-- Checks and installs Python requirements
-- Installs and configures Redis and FFmpeg
-- Creates virtual environment and installs dependencies
-- Sets up environment variables
-- Initializes the database
-- Starts all required services
-- Launches the application
+4. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your settings
+```
 
-3. Access the application at http://localhost:5000
+5. Initialize database:
+```bash
+flask init-db
+```
 
-The setup script handles everything - no manual installation or configuration required!
+6. Start Redis server:
+```bash
+redis-server
+```
+
+7. Run the application:
+```bash
+flask run
+```
+
+## Development
+
+### Running Tests
+
+The project includes comprehensive test suites:
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test categories
+pytest tests/unit  # Unit tests
+pytest tests/integration  # Integration tests
+pytest tests/performance  # Performance tests
+
+# Run with coverage report
+pytest --cov=app --cov-report=html
+```
+
+### System Monitoring
+
+The system includes built-in monitoring tools:
+
+1. Health Check:
+```bash
+curl http://localhost:5000/api/system/health
+```
+
+2. System Metrics:
+```bash
+curl http://localhost:5000/api/system/metrics
+```
+
+3. Performance Analysis:
+```bash
+curl http://localhost:5000/api/system/slow-queries
+```
+
+### Database Optimization
+
+Run database optimization:
+```bash
+curl -X POST http://localhost:5000/api/system/optimize
+```
 
 ## Project Structure
 
@@ -80,10 +132,10 @@ The setup script handles everything - no manual installation or configuration re
 music_streaming_app/
 ├── app/
 │   ├── core/
-│   │   ├── database.py    # Database operations
-│   │   ├── config.py      # Configuration management
-│   │   ├── logging.py     # Logging setup
 │   │   ├── cache.py       # Redis caching system
+│   │   ├── config.py      # Configuration management
+│   │   ├── database.py    # Database operations
+│   │   ├── monitoring.py  # System monitoring
 │   │   └── optimization.py # Database optimization
 │   ├── media/
 │   │   ├── scanner.py     # Media file scanning
@@ -99,141 +151,43 @@ music_streaming_app/
 │       ├── media.py       # Media endpoints
 │       ├── playlist.py    # Playlist endpoints
 │       └── ads.py         # Ad management endpoints
-├── instance/              # Instance-specific files
-├── logs/                  # Application logs
-├── media/                 # Media storage
-│   ├── uploads/          
-│   ├── processed/
-│   └── archive/
-├── tests/                 # Test suite
-├── .env.example          # Environment template
-├── config.py             # Application config
-├── requirements.txt      # Dependencies
-└── schema.sql           # Database schema
+├── tests/
+│   ├── unit/             # Unit tests
+│   ├── integration/      # Integration tests
+│   └── performance/      # Performance tests
+├── instance/             # Instance-specific files
+├── logs/                 # Application logs
+├── media/                # Media storage
+├── static/               # Static assets
+├── templates/            # HTML templates
+├── .env.example         # Environment template
+├── config.py            # Application config
+├── pytest.ini           # Test configuration
+├── requirements.txt     # Dependencies
+└── schema.sql          # Database schema
 ```
 
-## Configuration
+## Performance Optimization
 
-The system can be configured through environment variables or a configuration file. Key settings include:
+The system includes several performance optimization features:
 
-- `DATABASE_PATH`: Path to SQLite database
-- `MEDIA_UPLOAD_PATH`: Directory for media storage
-- `MAX_FILE_SIZE`: Maximum upload file size
-- `AD_MIN_FREQUENCY`: Minimum ads per session
-- `AD_MAX_FREQUENCY`: Maximum ads per session
-- `LOG_LEVEL`: Logging verbosity
+1. Redis Caching
+   - Response caching
+   - Query result caching
+   - Session data caching
+   - Cache invalidation strategies
 
-### Performance Settings
+2. Database Optimization
+   - Automatic index management
+   - Query performance analysis
+   - Connection pooling
+   - Regular maintenance tasks
 
-- `CACHE_TYPE`: Cache backend type (redis)
-- `CACHE_REDIS_HOST`: Redis server host
-- `CACHE_REDIS_PORT`: Redis server port
-- `CACHE_REDIS_DB`: Redis database number
-- `CACHE_DEFAULT_TIMEOUT`: Default cache entry timeout
-- `DB_POOL_SIZE`: Database connection pool size
-- `DB_MAX_OVERFLOW`: Maximum pool overflow
-- `DB_POOL_TIMEOUT`: Pool timeout in seconds
-
-See `.env.example` for all available options.
-
-## API Documentation
-
-### Media Endpoints
-
-- `GET /api/media`: List media files
-- `POST /api/media`: Upload new media
-- `GET /api/media/<id>`: Get media details
-- `PUT /api/media/<id>`: Update media metadata
-- `DELETE /api/media/<id>`: Delete media
-- `POST /api/media/scan`: Scan for new media
-
-### Playlist Endpoints
-
-- `GET /api/playlists`: List playlists
-- `POST /api/playlists`: Create playlist
-- `GET /api/playlists/<id>`: Get playlist details
-- `PUT /api/playlists/<id>`: Update playlist
-- `DELETE /api/playlists/<id>`: Delete playlist
-- `POST /api/playlists/<id>/items`: Add items
-- `DELETE /api/playlists/<id>/items`: Remove items
-- `POST /api/playlists/<id>/next`: Get next item
-
-### Ad Campaign Endpoints
-
-- `GET /api/campaigns`: List campaigns
-- `POST /api/campaigns`: Create campaign
-- `GET /api/campaigns/<id>`: Get campaign details
-- `PUT /api/campaigns/<id>`: Update campaign
-- `POST /api/campaigns/<id>/assets`: Add asset
-- `GET /api/campaigns/<id>/metrics`: Get metrics
-- `GET /api/campaigns/<id>/report`: Generate report
-
-## Development
-
-1. Set up development environment:
-```bash
-pip install -r requirements.txt
-```
-
-2. Start Redis server:
-```bash
-redis-server
-```
-
-3. Run tests:
-```bash
-pytest
-```
-
-4. Start development server:
-```bash
-flask run --debug
-```
-
-### Performance Monitoring
-
-The system includes built-in performance monitoring tools:
-
-1. Database Optimization:
-```bash
-flask db optimize  # Run manual database optimization
-```
-
-2. Cache Management:
-```bash
-flask cache clear  # Clear cache
-flask cache stats  # View cache statistics
-```
-
-3. System Health Check:
-```bash
-flask health-check  # Run system health check
-```
-
-The health check provides detailed metrics on:
-- Database performance and statistics
-- Cache hit rates and connection status
-- Storage usage and availability
-- Memory utilization
-
-## Production Deployment
-
-1. Set up production environment:
-```bash
-pip install -r requirements.txt
-```
-
-2. Configure environment variables:
-```bash
-export FLASK_ENV=production
-export FLASK_APP=app
-# Set other production variables
-```
-
-3. Run with Gunicorn:
-```bash
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
-```
+3. System Monitoring
+   - Resource usage tracking
+   - Performance metrics
+   - Error monitoring
+   - Health checks
 
 ## Contributing
 

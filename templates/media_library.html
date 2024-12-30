@@ -10,6 +10,24 @@
         .selected-item {
             background-color: #e7f1ff !important;
         }
+        .dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+            transition: all 0.2s ease;
+        }
+        .drag-over {
+            border: 2px dashed #0d6efd;
+            background-color: #e9ecef;
+            transform: scale(1.02);
+            transition: all 0.2s ease;
+        }
+        .list-group-item {
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+        .list-group-item:active {
+            cursor: grabbing;
+        }
         .media-list-container {
             height: calc(100vh - 250px);
             overflow-y: auto;

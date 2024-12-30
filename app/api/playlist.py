@@ -1,389 +1,402 @@
-from typing import Dict, List, Optional
-from flask import Blueprint, request, jsonify, current_app
-import json
+from flask import Blueprint, jsonify, request
+from app.core.database import get_db, get_playlist_state, save_playlist_state
+import random
 
-from ..core.config import get_settings
-from ..core.logging import api_logger, log_function_call, log_error
-from ..core.database import Database
-from ..playlist.manager import PlaylistManager
-from ..playlist.scheduler import AdScheduler
-
-# Create Blueprint
 playlist_api = Blueprint('playlist_api', __name__)
 
-# Initialize components
-settings = get_settings()
-db = Database(settings.database.path)
-playlist_manager = PlaylistManager(db)
-ad_scheduler = AdScheduler(db)
+# Global state variables
+current_playlist = None
+current_position = 0
+last_ad_position = 0
+is_repeat = True
+is_shuffle = False
+shuffle_queue = []
 
-@playlist_api.route('/', methods=['GET'])
-@log_function_call(api_logger)
+def pick_weighted_ad():
+    """Pick an ad based on weights."""
+    db = get_db()
+    ads = db.execute('SELECT * FROM ads WHERE active = 1').fetchall()
+    if not ads:
+        return None
+    
+    total_weight = sum(ad['weight'] for ad in ads)
+    r = random.uniform(0, total_weight)
+    current_weight = 0
+    
+    for ad in ads:
+        current_weight += ad['weight']
+        if r <= current_weight:
+            media = db.execute('SELECT * FROM media WHERE id = ?', [ad['media_id']]).fetchone()
+            return dict(media)
+    
+    return None
+
+@playlist_api.route('/playlists')
 def get_playlists():
-    """Get list of all playlists."""
-    try:
-        page = request.args.get('page', 1, type=int)
-        status = request.args.get('status', '')
-        search = request.args.get('q', '')
-        
-        # Base query
-        query = """
-            SELECT 
-                p.*,
-                COUNT(pi.id) as track_count,
-                SUM(COALESCE(m.duration, 0)) as duration,
-                ps.is_repeat,
-                ps.is_shuffle,
-                MAX(ph.played_at) as last_played_at
-            FROM playlists p
-            LEFT JOIN playlist_items pi ON p.id = pi.playlist_id
-            LEFT JOIN media m ON pi.media_id = m.id
-            LEFT JOIN playlist_state ps ON p.id = ps.playlist_id
-            LEFT JOIN playlist_history ph ON p.id = ph.playlist_id
-            WHERE 1=1
-        """
-        params = []
-        
-        # Add filters
-        if status:
-            query += " AND p.status = ?"
-            params.append(status)
-        if search:
-            query += " AND p.name LIKE ?"
-            params.append(f"%{search}%")
-            
-        query += " GROUP BY p.id"
-        
-        # Get total count
-        count_query = f"SELECT COUNT(*) FROM ({query}) as sub"
-        total = db.fetch_one(count_query, params)['COUNT(*)']
-        
-        # Add pagination
-        per_page = 10
-        offset = (page - 1) * per_page
-        query += f" LIMIT {per_page} OFFSET {offset}"
-        
-        # Get paginated results
-        playlists = db.fetch_all(query, params)
-        
-        return jsonify({
-            'items': [dict(p) for p in playlists],
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': total,
-                'pages': (total + per_page - 1) // per_page
-            }
-        })
+    """Get all playlists."""
+    db = get_db()
+    playlists = db.execute('SELECT * FROM playlists').fetchall()
+    return jsonify([dict(row) for row in playlists])
 
+@playlist_api.route('/playlist/<int:playlist_id>')
+def get_playlist(playlist_id):
+    """Get a specific playlist with its items."""
+    db = get_db()
+    playlist = db.execute('SELECT * FROM playlists WHERE id = ?', [playlist_id]).fetchone()
+    if not playlist:
+        return jsonify({'error': 'Playlist not found'}), 404
+    
+    items = db.execute('''
+        SELECT pi.*, m.* 
+        FROM playlist_items pi 
+        JOIN media m ON pi.media_id = m.id 
+        WHERE pi.playlist_id = ? 
+        ORDER BY pi.order_position
+    ''', [playlist_id]).fetchall()
+    
+    return jsonify({
+        'playlist': dict(playlist),
+        'items': [dict(item) for item in items]
+    })
+
+@playlist_api.route('/now-playing')
+def now_playing():
+    """Get currently playing media info."""
+    global current_playlist, current_position
+    
+    print(f"Current playlist: {current_playlist}, position: {current_position}")
+    
+    if not current_playlist:
+        return jsonify({'error': 'No playlist active'}), 404
+    
+    db = get_db()
+    try:
+        playlist_items = db.execute('''
+            SELECT m.* 
+            FROM playlist_items pi 
+            JOIN media m ON pi.media_id = m.id 
+            WHERE pi.playlist_id = ? 
+            ORDER BY pi.order_position
+        ''', [current_playlist]).fetchall()
+        
+        print(f"Found {len(playlist_items) if playlist_items else 0} items in playlist")
+        
+        if not playlist_items or current_position >= len(playlist_items):
+            return jsonify({'error': 'No media playing'}), 404
+        
+        current_media = dict(playlist_items[current_position])
+        print(f"Current media: {current_media}")
+        return jsonify(current_media)
     except Exception as e:
-        api_logger.error(f"Error getting playlists: {str(e)}")
+        print(f"Error in now_playing: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@playlist_api.route('/<int:playlist_id>', methods=['GET'])
-@log_function_call(api_logger)
-def get_playlist_details(playlist_id: int):
-    """Get detailed information about a playlist."""
+@playlist_api.route('/play', methods=['POST'])
+def play_playlist():
+    """Start playing a playlist."""
+    global current_playlist, current_position, last_ad_position, is_repeat, is_shuffle, shuffle_queue
+    
+    data = request.get_json()
+    playlist_id = data.get('playlist_id')
+    
+    print(f"Received request to play playlist {playlist_id}")
+    
+    if not playlist_id:
+        return jsonify({'error': 'Playlist ID required'}), 400
+    
+    db = get_db()
     try:
-        # Get playlist info
-        playlist = db.fetch_one(
-            """
-            SELECT 
-                p.*,
-                ps.current_position,
-                ps.last_ad_position,
-                ps.is_repeat,
-                ps.is_shuffle
-            FROM playlists p
-            LEFT JOIN playlist_state ps ON p.id = ps.playlist_id
-            WHERE p.id = ?
-            """,
-            (playlist_id,)
-        )
+        # Start transaction
+        db.execute('BEGIN')
         
+        playlist = db.execute('SELECT * FROM playlists WHERE id = ?', [playlist_id]).fetchone()
         if not playlist:
             return jsonify({'error': 'Playlist not found'}), 404
+            
+        # Get playlist items to verify it's not empty
+        items = db.execute('''
+            SELECT m.* 
+            FROM playlist_items pi 
+            JOIN media m ON pi.media_id = m.id 
+            WHERE pi.playlist_id = ? 
+            ORDER BY pi.order_position
+        ''', [playlist_id]).fetchall()
         
-        # Get items
-        items = playlist_manager.get_playlist_items(playlist_id)
+        if not items:
+            return jsonify({'error': 'Playlist is empty'}), 404
         
-        # Get current item
-        current_item = playlist_manager.get_current_item(playlist_id)
+        # Start fresh when playing a playlist
+        current_playlist = int(playlist_id)
+        current_position = 0
+        last_ad_position = 0
+        is_repeat = True  # Always enable repeat by default
+        is_shuffle = False  # Start with shuffle off
+        shuffle_queue = []
         
-        return jsonify({
-            **dict(playlist),
-            'items': items,
-            'current_item': current_item
+        # Save state to database
+        save_playlist_state({
+            'current_playlist': current_playlist,
+            'current_position': current_position,
+            'last_ad_position': last_ad_position,
+            'is_repeat': is_repeat,
+            'is_shuffle': is_shuffle,
+            'shuffle_queue': shuffle_queue
         })
-
+        
+        # Commit transaction
+        db.commit()
+        
+        print(f"Started playlist {current_playlist} at position {current_position}")
+        
+        # Return the first track
+        current_track = dict(items[0])
+        return jsonify(current_track)
+        
     except Exception as e:
-        api_logger.error(f"Error getting playlist details: {str(e)}")
+        if db:
+            db.rollback()
+        print(f"Error starting playlist: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@playlist_api.route('/', methods=['POST'])
-@log_function_call(api_logger)
+@playlist_api.route('/playlists', methods=['POST'])
 def create_playlist():
     """Create a new playlist."""
-    try:
-        data = request.get_json()
-        if not data or 'name' not in data:
-            return jsonify({'error': 'Name is required'}), 400
-        
-        playlist_id = playlist_manager.create_playlist(
-            name=data['name'],
-            description=data.get('description')
-        )
-        
-        if not playlist_id:
-            return jsonify({'error': 'Failed to create playlist'}), 500
-        
-        # Add items if provided
-        if 'items' in data:
-            playlist_manager.add_items(playlist_id, data['items'])
-        
-        return jsonify({
-            'id': playlist_id,
-            'message': 'Playlist created successfully'
-        })
+    data = request.get_json()
+    name = data.get('name')
+    description = data.get('description', '')
+    
+    if not name:
+        return jsonify({'error': 'Playlist name is required'}), 400
+    
+    db = get_db()
+    cursor = db.execute(
+        'INSERT INTO playlists (name, description) VALUES (?, ?)',
+        [name, description]
+    )
+    playlist_id = cursor.lastrowid
+    db.commit()
+    
+    return jsonify({
+        'id': playlist_id,
+        'name': name,
+        'description': description
+    })
 
-    except Exception as e:
-        api_logger.error(f"Error creating playlist: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+@playlist_api.route('/playlist/<int:playlist_id>/items', methods=['POST'])
+def add_playlist_item(playlist_id):
+    """Add an item to a playlist."""
+    data = request.get_json()
+    media_id = data.get('media_id')
+    
+    if not media_id:
+        return jsonify({'error': 'Media ID is required'}), 400
+    
+    db = get_db()
+    # Get the highest order position
+    max_order = db.execute(
+        'SELECT MAX(order_position) as max_order FROM playlist_items WHERE playlist_id = ?',
+        [playlist_id]
+    ).fetchone()
+    next_order = (max_order['max_order'] or -1) + 1
+    
+    cursor = db.execute(
+        'INSERT INTO playlist_items (playlist_id, media_id, order_position) VALUES (?, ?, ?)',
+        [playlist_id, media_id, next_order]
+    )
+    db.commit()
+    
+    return jsonify({
+        'id': cursor.lastrowid,
+        'playlist_id': playlist_id,
+        'media_id': media_id,
+        'order_position': next_order
+    })
 
-@playlist_api.route('/<int:playlist_id>', methods=['PUT'])
-@log_function_call(api_logger)
-def update_playlist(playlist_id: int):
-    """Update playlist details."""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        # Update basic info
-        updates = {}
-        if 'name' in data:
-            updates['name'] = data['name']
-        if 'description' in data:
-            updates['description'] = data['description']
-        
-        if updates:
-            db.update('playlists', updates, {'id': playlist_id})
-        
-        # Handle items if provided
-        if 'items' in data:
-            # Clear existing items
-            db.execute(
-                "DELETE FROM playlist_items WHERE playlist_id = ?",
-                (playlist_id,)
-            )
-            # Add new items
-            playlist_manager.add_items(playlist_id, data['items'])
-        
-        return jsonify({'message': 'Playlist updated successfully'})
-
-    except Exception as e:
-        api_logger.error(f"Error updating playlist: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>', methods=['DELETE'])
-@log_function_call(api_logger)
-def delete_playlist(playlist_id: int):
+@playlist_api.route('/playlist/<int:playlist_id>', methods=['DELETE'])
+def delete_playlist(playlist_id):
     """Delete a playlist."""
-    try:
-        # Delete playlist items
+    db = get_db()
+    db.execute('DELETE FROM playlists WHERE id = ?', [playlist_id])
+    db.commit()
+    return jsonify({'message': 'Playlist deleted'})
+
+@playlist_api.route('/playlist/<int:playlist_id>/items/<int:item_id>', methods=['DELETE'])
+def delete_playlist_item(playlist_id, item_id):
+    """Delete an item from a playlist."""
+    db = get_db()
+    db.execute('DELETE FROM playlist_items WHERE playlist_id = ? AND id = ?', [playlist_id, item_id])
+    db.commit()
+    return jsonify({'message': 'Item deleted'})
+
+@playlist_api.route('/playlist/<int:playlist_id>/order', methods=['PUT'])
+def update_playlist_order(playlist_id):
+    """Update the order of items in a playlist."""
+    data = request.get_json()
+    items = data.get('items', [])
+    
+    if not items:
+        return jsonify({'error': 'Items array is required'}), 400
+    
+    db = get_db()
+    for item in items:
         db.execute(
-            "DELETE FROM playlist_items WHERE playlist_id = ?",
-            (playlist_id,)
+            'UPDATE playlist_items SET order_position = ? WHERE id = ? AND playlist_id = ?',
+            [item['order_position'], item['id'], playlist_id]
         )
-        
-        # Delete playlist state
-        db.execute(
-            "DELETE FROM playlist_state WHERE playlist_id = ?",
-            (playlist_id,)
-        )
-        
-        # Delete playlist
-        db.delete('playlists', {'id': playlist_id})
-        
-        return jsonify({'message': 'Playlist deleted successfully'})
+    db.commit()
+    
+    return jsonify({'message': 'Playlist order updated'})
 
-    except Exception as e:
-        api_logger.error(f"Error deleting playlist: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>/items', methods=['POST'])
-@log_function_call(api_logger)
-def add_playlist_items(playlist_id: int):
-    """Add items to a playlist."""
-    try:
-        data = request.get_json()
-        if not data or 'media_ids' not in data:
-            return jsonify({'error': 'Media IDs are required'}), 400
-        
-        success = playlist_manager.add_items(
-            playlist_id,
-            data['media_ids']
-        )
-        
-        if not success:
-            return jsonify({'error': 'Failed to add items'}), 500
-        
-        return jsonify({'message': 'Items added successfully'})
-
-    except Exception as e:
-        api_logger.error(f"Error adding playlist items: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>/items', methods=['DELETE'])
-@log_function_call(api_logger)
-def remove_playlist_items(playlist_id: int):
-    """Remove items from a playlist."""
-    try:
-        data = request.get_json()
-        if not data or 'media_ids' not in data:
-            return jsonify({'error': 'Media IDs are required'}), 400
-        
-        success = playlist_manager.remove_items(
-            playlist_id,
-            data['media_ids']
-        )
-        
-        if not success:
-            return jsonify({'error': 'Failed to remove items'}), 500
-        
-        return jsonify({'message': 'Items removed successfully'})
-
-    except Exception as e:
-        api_logger.error(f"Error removing playlist items: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>/next', methods=['POST'])
-@log_function_call(api_logger)
-def next_item(playlist_id: int):
-    """Get next item in playlist, considering ad scheduling."""
-    try:
-        # Check if we should play an ad
-        if ad_scheduler.should_play_ad(playlist_id):
-            ad = ad_scheduler.get_next_ad(playlist_id)
-            if ad:
-                return jsonify({
-                    'type': 'ad',
-                    'item': ad
-                })
-        
-        # Get next regular item
-        item = playlist_manager.next_item(playlist_id)
-        if not item:
-            return jsonify({'error': 'No more items'}), 404
-        
-        return jsonify({
-            'type': 'media',
-            'item': item
+@playlist_api.route('/next', methods=['POST'])
+def next_track():
+    """Move to next track in playlist."""
+    global current_position, last_ad_position, shuffle_queue
+    
+    if not current_playlist:
+        return jsonify({'error': 'No playlist active'}), 404
+    
+    db = get_db()
+    playlist_items = db.execute('''
+        SELECT m.* 
+        FROM playlist_items pi 
+        JOIN media m ON pi.media_id = m.id 
+        WHERE pi.playlist_id = ? 
+        ORDER BY pi.order_position
+    ''', [current_playlist]).fetchall()
+    
+    if not playlist_items:
+        return jsonify({'error': 'Playlist is empty'}), 404
+    
+    # Check if we should play an ad
+    if current_position - last_ad_position >= 3:  # Play ad every 3 tracks
+        ad = pick_weighted_ad()
+        if ad:
+            last_ad_position = current_position
+            return jsonify({'type': 'ad', **ad})
+    
+    total_tracks = len(playlist_items)
+    
+    if is_shuffle:
+        if not shuffle_queue:
+            # Generate new shuffle queue when empty
+            shuffle_queue = list(range(total_tracks))
+            random.shuffle(shuffle_queue)
+            current_position = shuffle_queue.pop(0)
+        else:
+            if shuffle_queue:
+                current_position = shuffle_queue.pop(0)
+            elif is_repeat:
+                # Regenerate shuffle queue if repeat is on
+                shuffle_queue = list(range(total_tracks))
+                random.shuffle(shuffle_queue)
+                current_position = shuffle_queue.pop(0)
+            else:
+                # If not repeating and no more tracks, return error
+                return jsonify({'error': 'End of playlist'}), 404
+    else:
+        # Save current position before incrementing
+        current_position = (current_position + 1) % total_tracks if is_repeat else current_position + 1
+        if current_position >= total_tracks:
+            return jsonify({'error': 'End of playlist'}), 404
+    
+    # Return the current track information
+    if 0 <= current_position < len(playlist_items):
+        current_track = dict(playlist_items[current_position])
+        # Save state after track change
+        save_playlist_state({
+            'current_playlist': current_playlist,
+            'current_position': current_position,
+            'last_ad_position': last_ad_position,
+            'is_repeat': is_repeat,
+            'is_shuffle': is_shuffle,
+            'shuffle_queue': shuffle_queue
         })
+        return jsonify(current_track)
+    return jsonify({'error': 'No media playing'}), 404
 
-    except Exception as e:
-        api_logger.error(f"Error getting next item: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+@playlist_api.route('/save-state', methods=['POST'])
+def save_state():
+    """Save current playlist state."""
+    global current_playlist, current_position, last_ad_position, is_repeat, is_shuffle, shuffle_queue
+    save_playlist_state({
+        'current_playlist': current_playlist,
+        'current_position': current_position,
+        'last_ad_position': last_ad_position,
+        'is_repeat': is_repeat,
+        'is_shuffle': is_shuffle,
+        'shuffle_queue': shuffle_queue
+    })
+    return jsonify({'message': 'Playlist state saved'})
 
-@playlist_api.route('/<int:playlist_id>/shuffle', methods=['POST'])
-@log_function_call(api_logger)
-def toggle_shuffle(playlist_id: int):
-    """Toggle shuffle mode for a playlist."""
-    try:
-        success = playlist_manager.toggle_shuffle(playlist_id)
-        if not success:
-            return jsonify({'error': 'Failed to toggle shuffle'}), 500
-        
-        return jsonify({'message': 'Shuffle mode toggled'})
+@playlist_api.route('/toggle-repeat', methods=['POST'])
+def toggle_repeat():
+    """Toggle repeat mode."""
+    global is_repeat, current_playlist, current_position, last_ad_position, is_shuffle, shuffle_queue
+    is_repeat = not is_repeat
+    # Save state after toggling repeat
+    save_playlist_state({
+        'current_playlist': current_playlist,
+        'current_position': current_position,
+        'last_ad_position': last_ad_position,
+        'is_repeat': is_repeat,
+        'is_shuffle': is_shuffle,
+        'shuffle_queue': shuffle_queue
+    })
+    return jsonify({'repeat': is_repeat})
 
-    except Exception as e:
-        api_logger.error(f"Error toggling shuffle: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+@playlist_api.route('/toggle-shuffle', methods=['POST'])
+def toggle_shuffle():
+    """Toggle shuffle mode."""
+    global is_shuffle, shuffle_queue, current_playlist, current_position, last_ad_position, is_repeat
+    is_shuffle = not is_shuffle
+    shuffle_queue = []  # Reset shuffle queue when toggling
+    # Save state after toggling shuffle
+    save_playlist_state({
+        'current_playlist': current_playlist,
+        'current_position': current_position,
+        'last_ad_position': last_ad_position,
+        'is_repeat': is_repeat,
+        'is_shuffle': is_shuffle,
+        'shuffle_queue': shuffle_queue
+    })
+    return jsonify({'shuffle': is_shuffle})
 
-@playlist_api.route('/<int:playlist_id>/schedule', methods=['POST'])
-@log_function_call(api_logger)
-def set_schedule(playlist_id: int):
-    """Set a playlist's schedule."""
-    try:
-        data = request.get_json()
-        if not data or 'type' not in data:
-            return jsonify({'error': 'Schedule type is required'}), 400
-
-        # Validate schedule data
-        if data['type'] not in ['once', 'daily', 'weekly']:
-            return jsonify({'error': 'Invalid schedule type'}), 400
-
-        if data['type'] == 'once' and 'datetime' not in data:
-            return jsonify({'error': 'Datetime is required for one-time schedule'}), 400
-
-        if 'time' not in data:
-            return jsonify({'error': 'Time is required'}), 400
-
-        if data['type'] == 'weekly' and 'days' not in data:
-            return jsonify({'error': 'Days are required for weekly schedule'}), 400
-
-        success = playlist_manager.set_schedule(playlist_id, data)
-        if not success:
-            return jsonify({'error': 'Failed to set schedule'}), 500
-
-        return jsonify({'message': 'Schedule set successfully'})
-
-    except Exception as e:
-        api_logger.error(f"Error setting schedule: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>/schedule', methods=['GET'])
-@log_function_call(api_logger)
-def get_schedule(playlist_id: int):
-    """Get a playlist's schedule."""
-    try:
-        schedule = playlist_manager.get_schedule(playlist_id)
-        if not schedule:
-            return jsonify({'message': 'No schedule found'}), 404
-
-        return jsonify(schedule)
-
-    except Exception as e:
-        api_logger.error(f"Error getting schedule: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>/repeat', methods=['POST'])
-@log_function_call(api_logger)
-def toggle_repeat(playlist_id: int):
-    """Toggle repeat mode for a playlist."""
-    try:
-        success = playlist_manager.toggle_repeat(playlist_id)
-        if not success:
-            return jsonify({'error': 'Failed to toggle repeat'}), 500
-        
-        return jsonify({'message': 'Repeat mode toggled'})
-
-    except Exception as e:
-        api_logger.error(f"Error toggling repeat: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@playlist_api.route('/<int:playlist_id>/move', methods=['POST'])
-@log_function_call(api_logger)
-def move_item(playlist_id: int):
-    """Move an item to a new position in the playlist."""
-    try:
-        data = request.get_json()
-        if not data or 'item_id' not in data or 'new_position' not in data:
-            return jsonify({
-                'error': 'Item ID and new position are required'
-            }), 400
-        
-        success = playlist_manager.move_item(
-            playlist_id,
-            data['item_id'],
-            data['new_position']
-        )
-        
-        if not success:
-            return jsonify({'error': 'Failed to move item'}), 500
-        
-        return jsonify({'message': 'Item moved successfully'})
-
-    except Exception as e:
-        api_logger.error(f"Error moving playlist item: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+@playlist_api.route('/next-track')
+def get_next_track():
+    """Get information about the next track in the playlist."""
+    if not current_playlist:
+        return jsonify({'error': 'No playlist active'}), 404
+    
+    db = get_db()
+    playlist_items = db.execute('''
+        SELECT m.* 
+        FROM playlist_items pi 
+        JOIN media m ON pi.media_id = m.id 
+        WHERE pi.playlist_id = ? 
+        ORDER BY pi.order_position
+    ''', [current_playlist]).fetchall()
+    
+    if not playlist_items:
+        return jsonify({'error': 'Playlist is empty'}), 404
+    
+    total_tracks = len(playlist_items)
+    next_position = 0
+    
+    if is_shuffle:
+        if shuffle_queue:
+            next_position = shuffle_queue[0]
+        elif is_repeat:
+            # If shuffle queue is empty but repeat is on, next would be first track of new shuffle
+            next_position = 0
+        else:
+            return jsonify({'error': 'End of playlist'}), 404
+    else:
+        next_position = (current_position + 1) % total_tracks if is_repeat else current_position + 1
+        if next_position >= total_tracks:
+            return jsonify({'error': 'End of playlist'}), 404
+    
+    if 0 <= next_position < len(playlist_items):
+        next_track = dict(playlist_items[next_position])
+        return jsonify(next_track)
+    
+    return jsonify({'error': 'No next track available'}), 404

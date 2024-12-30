@@ -1,148 +1,206 @@
-"""Database optimization module for improving query performance."""
-from typing import List
-from app.core.database import Database
-from app.core.logging import get_logger
+"""Database optimization and performance management."""
+import logging
+from typing import List, Dict, Any
+from sqlalchemy import create_engine, text, inspect
+from sqlalchemy.pool import QueuePool
+from app.core.config import get_settings
+from app.core.monitoring import get_monitor
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+monitor = get_monitor()
 
 class DatabaseOptimizer:
-    def __init__(self, db: Database):
-        self.db = db
+    """Handles database optimization and performance monitoring."""
 
-    def create_indexes(self) -> None:
-        """Create all necessary indexes for optimal performance."""
+    def __init__(self):
+        """Initialize the optimizer with database connection."""
+        settings = get_settings()
+        self.engine = create_engine(
+            settings.get_database_url(),
+            poolclass=QueuePool,
+            pool_size=10,
+            max_overflow=20,
+            pool_timeout=30,
+            pool_recycle=1800
+        )
+
+    def analyze_table_statistics(self) -> Dict[str, Any]:
+        """Analyze table statistics."""
         try:
-            # Media table indexes
-            self._create_index('idx_media_type', 'media', ['type'])
-            self._create_index('idx_media_artist', 'media', ['artist'])
-            self._create_index('idx_media_title', 'media', ['title'])
-            self._create_index('idx_media_checksum', 'media', ['checksum'])
-
-            # Playlist related indexes
-            self._create_index('idx_playlist_items_playlist', 'playlist_items', ['playlist_id'])
-            self._create_index('idx_playlist_items_media', 'playlist_items', ['media_id'])
-            self._create_index('idx_playlist_items_position', 'playlist_items', ['order_position'])
-            self._create_index('idx_playlist_state_playlist', 'playlist_state', ['playlist_id'])
-
-            # Tag related indexes
-            self._create_index('idx_media_tags_media', 'media_tags', ['media_id'])
-            self._create_index('idx_media_tags_tag', 'media_tags', ['tag_id'])
-            self._create_index('idx_tags_name', 'tags', ['name'])
-
-            # Ad campaign related indexes
-            self._create_index('idx_ad_campaigns_status', 'ad_campaigns', ['status'])
-            self._create_index('idx_ad_campaigns_dates', 'ad_campaigns', ['start_date', 'end_date'])
-            self._create_index('idx_ad_campaigns_updated', 'ad_campaigns', ['updated_at'])
-
-            # Ad assets indexes
-            self._create_index('idx_ad_assets_campaign', 'ad_assets', ['campaign_id'])
-            self._create_index('idx_ad_assets_media', 'ad_assets', ['media_id'])
-            self._create_index('idx_ad_assets_type', 'ad_assets', ['type'])
-            self._create_index('idx_ad_assets_active', 'ad_assets', ['active'])
-
-            # Ad schedule indexes
-            self._create_index('idx_ad_schedules_campaign', 'ad_schedules', ['campaign_id'])
-            self._create_index('idx_ad_schedules_playlist', 'ad_schedules', ['playlist_id'])
-            self._create_index('idx_ad_schedules_priority', 'ad_schedules', ['priority'])
-            self._create_index('idx_ad_schedules_time', 'ad_schedules', ['start_time', 'end_time'])
-
-            # Ad logs indexes for analytics
-            self._create_index('idx_ad_logs_campaign', 'ad_logs', ['campaign_id'])
-            self._create_index('idx_ad_logs_asset', 'ad_logs', ['asset_id'])
-            self._create_index('idx_ad_logs_playlist', 'ad_logs', ['playlist_id'])
-            self._create_index('idx_ad_logs_timestamp', 'ad_logs', ['timestamp'])
-            self._create_index('idx_ad_logs_completed', 'ad_logs', ['completed'])
-
-            logger.info("Successfully created all database indexes")
+            stats = {}
+            inspector = inspect(self.engine)
+            
+            for table_name in inspector.get_table_names():
+                with self.engine.connect() as conn:
+                    # Get row count
+                    result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    row_count = result.scalar()
+                    
+                    # Get table size
+                    result = conn.execute(text(f"SELECT page_count * page_size as size FROM pragma_page_count('{table_name}'), pragma_page_size()"))
+                    size = result.scalar()
+                    
+                    # Get index information
+                    indexes = inspector.get_indexes(table_name)
+                    
+                    stats[table_name] = {
+                        'row_count': row_count,
+                        'size_bytes': size,
+                        'indexes': len(indexes),
+                        'index_details': indexes
+                    }
+            
+            return stats
         except Exception as e:
-            logger.error(f"Error creating indexes: {e}")
-            raise
+            logger.error(f"Error analyzing table statistics: {e}")
+            monitor.record_error('database_optimization', f"Statistics analysis failed: {e}")
+            return {}
 
-    def analyze_tables(self) -> None:
-        """Run ANALYZE on all tables to update statistics."""
+    def optimize_indexes(self) -> List[str]:
+        """Create and optimize indexes based on usage patterns."""
         try:
-            self.db.execute("ANALYZE")
-            logger.info("Successfully analyzed database tables")
+            operations = []
+            inspector = inspect(self.engine)
+            
+            # Common patterns for index creation
+            index_patterns = {
+                'id': True,  # Always index IDs
+                'created_at': True,  # Timestamp columns
+                'updated_at': True,
+                'status': True,  # Status columns
+                'type': True,
+                'user_id': True,  # Foreign key columns
+                'campaign_id': True,
+                'playlist_id': True
+            }
+            
+            with self.engine.connect() as conn:
+                for table_name in inspector.get_table_names():
+                    existing_indexes = {idx['name']: idx for idx in inspector.get_indexes(table_name)}
+                    columns = inspector.get_columns(table_name)
+                    
+                    for column in columns:
+                        col_name = column['name'].lower()
+                        
+                        # Check if column matches any index pattern
+                        should_index = any(
+                            pattern in col_name 
+                            for pattern in index_patterns 
+                            if index_patterns[pattern]
+                        )
+                        
+                        if should_index:
+                            index_name = f"idx_{table_name}_{col_name}"
+                            
+                            # Create index if it doesn't exist
+                            if index_name not in existing_indexes:
+                                try:
+                                    conn.execute(text(
+                                        f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({col_name})"
+                                    ))
+                                    operations.append(f"Created index {index_name}")
+                                except Exception as e:
+                                    logger.error(f"Error creating index {index_name}: {e}")
+                                    monitor.record_error('database_optimization', f"Index creation failed: {e}")
+            
+            return operations
         except Exception as e:
-            logger.error(f"Error analyzing tables: {e}")
-            raise
+            logger.error(f"Error optimizing indexes: {e}")
+            monitor.record_error('database_optimization', f"Index optimization failed: {e}")
+            return []
 
-    def optimize_database(self) -> None:
-        """Run VACUUM to optimize database file structure."""
+    def analyze_query_performance(self) -> List[Dict[str, Any]]:
+        """Analyze and log slow queries."""
         try:
-            # Enable auto_vacuum for better space management
-            self.db.execute("PRAGMA auto_vacuum = FULL")
-            # Run VACUUM to rebuild the database file
-            self.db.execute("VACUUM")
-            logger.info("Successfully optimized database file structure")
+            with self.engine.connect() as conn:
+                # Enable query timing
+                conn.execute(text("PRAGMA query_only = ON"))
+                
+                # Get slow queries from SQLite statistics
+                result = conn.execute(text("""
+                    SELECT 
+                        sql,
+                        avg_us / 1000000.0 as avg_seconds,
+                        count
+                    FROM sqlite_stat4
+                    WHERE avg_us > 100000  -- Queries taking more than 100ms
+                    ORDER BY avg_us DESC
+                    LIMIT 10
+                """))
+                
+                slow_queries = []
+                for row in result:
+                    slow_queries.append({
+                        'query': row[0],
+                        'avg_duration': row[1],
+                        'execution_count': row[2]
+                    })
+                
+                return slow_queries
         except Exception as e:
-            logger.error(f"Error optimizing database: {e}")
-            raise
+            logger.error(f"Error analyzing query performance: {e}")
+            monitor.record_error('database_optimization', f"Query analysis failed: {e}")
+            return []
 
-    def optimize_query_planner(self) -> None:
-        """Configure SQLite query planner for optimal performance."""
+    def optimize_database(self) -> Dict[str, Any]:
+        """Run full database optimization."""
         try:
-            # Enable WAL mode for better concurrency
-            self.db.execute("PRAGMA journal_mode = WAL")
-            # Set reasonable cache size (4MB)
-            self.db.execute("PRAGMA cache_size = -4000")
-            # Enable memory-mapped I/O for better performance
-            self.db.execute("PRAGMA mmap_size = 268435456")  # 256MB
-            # Set reasonable page size
-            self.db.execute("PRAGMA page_size = 4096")
-            # Enable foreign key constraints
-            self.db.execute("PRAGMA foreign_keys = ON")
-            logger.info("Successfully configured query planner settings")
+            with self.engine.connect() as conn:
+                # Vacuum the database
+                conn.execute(text("VACUUM"))
+                
+                # Analyze tables
+                conn.execute(text("ANALYZE"))
+                
+                # Optimize indexes
+                index_operations = self.optimize_indexes()
+                
+                # Get statistics
+                stats = self.analyze_table_statistics()
+                
+                # Get slow queries
+                slow_queries = self.analyze_query_performance()
+                
+                return {
+                    'status': 'success',
+                    'operations': {
+                        'vacuum': True,
+                        'analyze': True,
+                        'index_operations': index_operations
+                    },
+                    'statistics': stats,
+                    'slow_queries': slow_queries
+                }
         except Exception as e:
-            logger.error(f"Error configuring query planner: {e}")
-            raise
+            logger.error(f"Error during database optimization: {e}")
+            monitor.record_error('database_optimization', f"Full optimization failed: {e}")
+            return {
+                'status': 'error',
+                'error': str(e)
+            }
 
-    def _create_index(self, index_name: str, table: str, columns: List[str]) -> None:
-        """Create an index if it doesn't exist."""
-        columns_str = ', '.join(columns)
-        query = f"""
-        CREATE INDEX IF NOT EXISTS {index_name}
-        ON {table} ({columns_str})
-        """
+    def get_connection_pool_status(self) -> Dict[str, Any]:
+        """Get status of the connection pool."""
         try:
-            self.db.execute(query)
-            logger.debug(f"Created index {index_name} on {table}({columns_str})")
+            return {
+                'pool_size': self.engine.pool.size(),
+                'checkedin': self.engine.pool.checkedin(),
+                'checkedout': self.engine.pool.checkedout(),
+                'overflow': self.engine.pool.overflow(),
+                'timeout': self.engine.pool.timeout,
+                'recycle': self.engine.pool.recycle
+            }
         except Exception as e:
-            logger.error(f"Error creating index {index_name}: {e}")
-            raise
+            logger.error(f"Error getting pool status: {e}")
+            monitor.record_error('database_optimization', f"Pool status check failed: {e}")
+            return {}
 
-    def get_index_stats(self) -> list[dict]:
-        """Get statistics about existing indexes."""
-        query = """
-        SELECT 
-            m.type as object_type,
-            m.name as object_name,
-            m.tbl_name as table_name,
-            m.sql as creation_sql
-        FROM sqlite_master m
-        WHERE m.type = 'index'
-        ORDER BY m.tbl_name, m.name
-        """
-        try:
-            return self.db.fetch_all(query)
-        except Exception as e:
-            logger.error(f"Error getting index statistics: {e}")
-            raise
+# Global optimizer instance
+_optimizer_instance = None
 
-    def get_table_stats(self) -> list[dict]:
-        """Get statistics about tables."""
-        query = """
-        SELECT 
-            m.name as table_name,
-            (SELECT COUNT(*) FROM sqlite_master i 
-             WHERE i.type = 'index' AND i.tbl_name = m.name) as index_count,
-            (SELECT COUNT(*) FROM pragma_table_info(m.name)) as column_count
-        FROM sqlite_master m
-        WHERE m.type = 'table'
-        ORDER BY m.name
-        """
-        try:
-            return self.db.fetch_all(query)
-        except Exception as e:
-            logger.error(f"Error getting table statistics: {e}")
-            raise
+def get_optimizer() -> DatabaseOptimizer:
+    """Get the global database optimizer instance."""
+    global _optimizer_instance
+    if _optimizer_instance is None:
+        _optimizer_instance = DatabaseOptimizer()
+    return _optimizer_instance
